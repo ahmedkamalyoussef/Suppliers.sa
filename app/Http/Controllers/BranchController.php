@@ -87,7 +87,10 @@ class BranchController extends Controller
             'status' => ['sometimes', 'string', 'in:active,inactive'],
         ]);
 
-        $branch->update($request->only(['name', 'location', 'service_distance']));
+        $branch->update($request->only([
+            'name', 'phone', 'email', 'address', 'manager_name',
+            'latitude', 'longitude', 'working_hours', 'special_services', 'status'
+        ]));
 
         return response()->json([
             'message' => 'Branch updated successfully',

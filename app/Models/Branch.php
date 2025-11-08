@@ -11,13 +11,23 @@ class Branch extends Model
 
     protected $fillable = [
         'name',
-        'location',
-        'service_distance',
+        'phone',
+        'email',
+        'address',
+        'manager_name',
+        'latitude',
+        'longitude',
+        'working_hours',
+        'special_services',
+        'status',
         'is_main_branch'
     ];
 
     protected $casts = [
-        'service_distance' => 'decimal:2',
+        'working_hours' => 'array',
+        'special_services' => 'array',
+        'latitude' => 'decimal:6',
+        'longitude' => 'decimal:6',
         'is_main_branch' => 'boolean'
     ];
 
