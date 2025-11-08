@@ -10,11 +10,14 @@ class OtpNotification extends Notification
 {
     use Queueable;
 
-    private string $otp;
-    private int $expiresIn;
+    public readonly string $otp;
+    public readonly int $expiresIn;
 
     /**
      * Create a new notification instance.
+     *
+     * @param string $otp
+     * @param int $expiresIn Expiration time in minutes
      */
     public function __construct(string $otp, int $expiresIn = 10)
     {
@@ -25,15 +28,19 @@ class OtpNotification extends Notification
     /**
      * Get the notification's delivery channels.
      *
+     * @param  mixed  $notifiable
      * @return array<int, string>
      */
     public function via(object $notifiable): array
     {
-        return ['mail'];
+        return ['mail']; // يمكنك إضافة 'database' أو 'nexmo' لاحقًا
     }
 
     /**
      * Get the mail representation of the notification.
+     *
+     * @param  mixed  $notifiable
+     * @return \Illuminate\Notifications\Messages\MailMessage
      */
     public function toMail(object $notifiable): MailMessage
     {
@@ -49,6 +56,7 @@ class OtpNotification extends Notification
     /**
      * Get the array representation of the notification.
      *
+     * @param  mixed  $notifiable
      * @return array<string, mixed>
      */
     public function toArray(object $notifiable): array

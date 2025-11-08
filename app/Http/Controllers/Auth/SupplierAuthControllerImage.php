@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Str;
+use Illuminate\Support\Facades\URL;
 
 class SupplierAuthControllerImage extends Controller
 {
@@ -15,7 +16,7 @@ class SupplierAuthControllerImage extends Controller
     public function updateProfileImage(Request $request)
     {
         $request->validate([
-            'profile_image' => 'required|image|mimes:jpeg,png,jpg'
+            'profile_image' => 'required|image|mimes:jpeg,png,jpg|max:2048'
         ]);
 
         $supplier = $request->user();
@@ -25,7 +26,8 @@ class SupplierAuthControllerImage extends Controller
             File::makeDirectory($destDir, 0755, true);
         }
 
-        if ($supplier->profile_image) {
+        // Delete existing profile image if not default
+        if ($supplier->profile_image && $supplier->profile_image !== 'uploads/default.png') {
             $existing = public_path($supplier->profile_image);
             if (File::exists($existing)) {
                 File::delete($existing);
@@ -41,7 +43,8 @@ class SupplierAuthControllerImage extends Controller
 
         return response()->json([
             'message' => 'Profile image updated successfully',
-            'user' => $supplier
+            'user' => $supplier,
+            'profile_image_url' => URL::to($supplier->profile_image)
         ]);
     }
 }
