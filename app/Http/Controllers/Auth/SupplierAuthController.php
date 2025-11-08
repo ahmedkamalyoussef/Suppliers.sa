@@ -13,6 +13,8 @@ use Illuminate\Support\Facades\Mail;
 use Illuminate\Validation\Rules\Password;
 use Illuminate\Support\Facades\Cache;
 use Laravel\Sanctum\PersonalAccessToken;
+use Illuminate\Support\Facades\File;
+use Illuminate\Support\Str;
 
 class SupplierAuthController extends Controller
 {
@@ -255,6 +257,42 @@ class SupplierAuthController extends Controller
 
         return response()->json([
             'message' => 'Profile updated successfully',
+            'user' => $supplier
+        ]);
+    }
+
+    public function updateProfileImage(Request $request)
+    {
+        $request->validate([
+            'profile_image' => 'required|image|mimes:jpeg,png,jpg|max:2048'
+        ]);
+
+        $supplier = $request->user();
+
+        $destDir = public_path('uploads/suppliers');
+        if (!File::exists($destDir)) {
+            File::makeDirectory($destDir, 0755, true);
+        }
+
+        if ($supplier->profile_image) {
+            $existing = public_path($supplier->profile_image);
+            if (File::exists($existing)) {
+                File::delete($existing);
+            }
+        }
+
+        $file = $request->file('profile_image');
+        $filename = Str::uuid() . '.' . $file->getClientOriginalExtension();
+        $file->move($destDir, $filename);
+
+        $supplier->profile_image = 'uploads/suppliers/' . $filename;
+        $supplier->save();
+
+        // reload profile relation
+        $supplier->load('profile');
+
+        return response()->json([
+            'message' => 'Profile image updated successfully',
             'user' => $supplier
         ]);
     }

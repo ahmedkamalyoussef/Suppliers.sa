@@ -10,6 +10,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
 
@@ -44,16 +45,12 @@ class BuyerAuthController extends Controller
     $otp = Otp::generateForUser($user->id, $user->email);
 
         // Send notification/email immediately
-        $user->notify(new OtpNotification($otp->otp));
 
         $response = [
             'message' => 'Registration successful. Please verify your email with the OTP sent.',
             'user' => $user
         ];
 
-        if (app()->environment('local', 'testing')) {
-            $response['otp'] = $otp->otp;
-        }
 
         return response()->json($response, 201);
     }
@@ -127,15 +124,24 @@ class BuyerAuthController extends Controller
         }
 
         $user = $request->user();
+        // Ensure public/uploads/buyers exists
+        $destDir = public_path('uploads/buyers');
+        if (!File::exists($destDir)) {
+            File::makeDirectory($destDir, 0755, true);
+        }
 
+        // Delete previous image if present (path stored like 'uploads/buyers/xxx')
         if ($user->profile_image) {
-            Storage::delete('public/' . $user->profile_image);
+            $existing = public_path($user->profile_image);
+            if (File::exists($existing)) {
+                File::delete($existing);
+            }
         }
 
         $file = $request->file('profile_image');
         $filename = Str::uuid() . '.' . $file->getClientOriginalExtension();
-        $file->storeAs('public/uploads/buyers', $filename);
-        
+        $file->move($destDir, $filename);
+
         $user->profile_image = 'uploads/buyers/' . $filename;
         $user->save();
 
