@@ -5,17 +5,18 @@ namespace App\Models;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Laravel\Sanctum\HasApiTokens;
+use Illuminate\Notifications\Notifiable;
 
 class Supplier extends Authenticatable
 {
-    use HasApiTokens, HasFactory;
+    use HasApiTokens, HasFactory, Notifiable;
 
     protected $fillable = [
         'name',
         'email',
         'password',
         'phone',
-        'email_verified'
+        'profile_image'
     ];
 
     protected $hidden = [
@@ -24,7 +25,7 @@ class Supplier extends Authenticatable
     ];
 
     protected $casts = [
-        'email_verified' => 'boolean',
+        'email_verified_at' => 'datetime'
     ];
 
     public function profile()

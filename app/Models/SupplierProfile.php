@@ -20,7 +20,6 @@ class SupplierProfile extends Model
         'working_hours' => 'array',
         'has_branches' => 'boolean',
         'service_distance' => 'decimal:2',
-        'service_distance' => 'decimal:2',
     ];
 
     public function supplier()

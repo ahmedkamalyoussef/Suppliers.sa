@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Validation\Rules\Password;
 use Illuminate\Support\Facades\Cache;
+use Laravel\Sanctum\PersonalAccessToken;
 
 class SupplierAuthController extends Controller
 {
@@ -24,6 +25,13 @@ class SupplierAuthController extends Controller
             'password' => ['required', 'string', 'min:8'],
             'referral_code' => ['nullable', 'string']
         ]);
+
+        // Prevent using an email already registered as a buyer
+        if (\App\Models\User::where('email', $request->email)->exists()) {
+            return response()->json([
+                'message' => 'Email is already registered as a buyer.'
+            ], 422);
+        }
 
         $supplier = Supplier::create([
             'email' => $request->email,
@@ -61,7 +69,7 @@ class SupplierAuthController extends Controller
             ], 401);
         }
 
-        if (!$supplier->email_verified) {
+        if (!$supplier->email_verified_at) {
             return response()->json([
                 'message' => 'Email not verified',
                 'email_verified' => false
@@ -70,47 +78,84 @@ class SupplierAuthController extends Controller
 
         $token = $supplier->createToken('auth-token')->plainTextToken;
 
+        // Load the supplier with profile
+        $supplier->load('profile');
+
         return response()->json([
-            'token' => $token,
-            'supplier' => $supplier,
-            'profile' => $supplier->profile
+            'message' => 'Login successful',
+            'user' => $supplier,
+            'access_token' => $token,
+            'token_type' => 'Bearer'
         ]);
     }
 
     public function logout(Request $request)
     {
-        $request->user()->currentAccessToken()->delete();
-        
-        return response()->json([
-            'message' => 'Logged out successfully'
-        ]);
-    }
-
-    public function sendOtp(Request $request)
-    {
-        $request->validate([
-            'email' => ['required', 'email', 'exists:suppliers,email'],
-        ]);
-
-        $otp = Otp::generateFor($request->email);
-        
-        // Send OTP via email
-        Mail::raw("Your verification code is: {$otp->code}", function ($message) use ($request) {
-            $message->to($request->email)
-                   ->subject('Email Verification OTP');
-        });
-
-        if (app()->environment('local', 'testing')) {
-            return response()->json([
-                'message' => 'OTP sent successfully',
-                'otp' => $otp->code  // Only in non-production
-            ]);
+        // Try deleting currentAccessToken
+        try {
+            if ($request->user() && method_exists($request->user(), 'currentAccessToken')) {
+                $token = $request->user()->currentAccessToken();
+                if ($token && method_exists($token, 'delete')) {
+                    $token->delete();
+                    return response()->json(['message' => 'Logged out successfully']);
+                }
+            }
+        } catch (\Throwable $e) {
+            // ignore
         }
 
+        // Fallback: delete by bearer token
+        $bearer = $request->bearerToken();
+        if ($bearer) {
+            $pat = PersonalAccessToken::findToken($bearer);
+            if ($pat) {
+                $pat->delete();
+                return response()->json(['message' => 'Logged out successfully']);
+            }
+        }
+
+        return response()->json(['message' => 'Logged out successfully']);
+    }
+
+  public function sendOtp(Request $request)
+{
+    $request->validate([
+        'email' => ['required', 'email'],
+    ]);
+
+    // أولاً نحاول نلاقي الـ User
+    $user = \App\Models\User::where('email', $request->email)->first();
+    if ($user) {
+        $otp = Otp::generateForUser($user->id);
+    } else {
+        // لو مش موجود في Users، نجرب الـ Supplier
+        $supplier = \App\Models\Supplier::where('email', $request->email)->first();
+        if (!$supplier) {
+            return response()->json([
+                'message' => 'Email not found in users or suppliers.'
+            ], 404);
+        }
+        $otp = Otp::generateForSupplier($supplier->id);
+    }
+
+    // إرسال الإيميل
+    Mail::raw("Your verification code is: {$otp->otp}", function ($message) use ($request) {
+        $message->to($request->email)
+                ->subject('Email Verification OTP');
+    });
+
+    // للبيئة المحلية أو الاختبارات، نرجع OTP
+    if (app()->environment('local', 'testing')) {
         return response()->json([
-            'message' => 'OTP sent successfully'
+            'message' => 'OTP sent successfully',
+            'otp' => $otp->otp
         ]);
     }
+
+    return response()->json([
+        'message' => 'OTP sent successfully'
+    ]);
+}
 
     public function verifyOtp(Request $request)
     {
@@ -119,18 +164,21 @@ class SupplierAuthController extends Controller
             'otp' => ['required', 'string', 'size:6'],
         ]);
 
-        $otp = Otp::where('email', $request->email)
-                  ->latest()
+        $supplier = \App\Models\Supplier::where('email', $request->email)->first();
+
+        $otp = Otp::where('user_id', $supplier->id)
+                  ->where('otp', $request->otp)
+                  ->where('expires_at', '>', now())
                   ->first();
 
-        if (!$otp || !$otp->isValid() || $otp->code !== $request->otp) {
+        if (!$otp || !$otp->isValid()) {
             return response()->json([
                 'message' => 'Invalid or expired OTP'
             ], 400);
         }
 
         $supplier = Supplier::where('email', $request->email)->first();
-        $supplier->email_verified = true;
+        $supplier->email_verified_at = now();
         $supplier->save();
 
         // Delete used OTP
@@ -139,11 +187,14 @@ class SupplierAuthController extends Controller
         // Generate token for automatic login
         $token = $supplier->createToken('auth-token')->plainTextToken;
 
+        // Load the supplier with profile
+        $supplier->load('profile');
+
         return response()->json([
             'message' => 'Email verified successfully',
-            'token' => $token,
-            'supplier' => $supplier,
-            'profile' => $supplier->profile
+            'user' => $supplier,
+            'access_token' => $token,
+            'token_type' => 'Bearer'
         ]);
     }
 
@@ -157,22 +208,54 @@ class SupplierAuthController extends Controller
             'business_name' => ['sometimes', 'string', 'max:255'],
             'business_type' => ['sometimes', 'string', 'max:50'],
             'service_distance' => ['sometimes', 'numeric', 'min:0'],
-            'location' => ['sometimes', 'string'],
+            'business_categories' => ['sometimes', 'array'],
+            'keywords' => ['sometimes', 'array'],
+            'target_market' => ['sometimes', 'array'],
+            'services_offered' => ['sometimes', 'array'],
+            'website' => ['sometimes', 'string', 'nullable'],
+            'additional_phones' => ['sometimes', 'array'],
+            'business_address' => ['sometimes', 'string', 'nullable'],
+            'latitude' => ['sometimes', 'numeric', 'nullable'],
+            'longitude' => ['sometimes', 'numeric', 'nullable'],
+            'working_hours' => ['sometimes', 'array', 'nullable'],
+            'has_branches' => ['sometimes', 'boolean']
         ]);
 
-        if ($request->has('name') || $request->has('phone')) {
-            $supplier->update($request->only(['name', 'phone']));
+        // Update supplier fields
+        $supplierFields = array_filter($request->only(['name', 'phone']));
+        if (!empty($supplierFields)) {
+            $supplier->update($supplierFields);
         }
 
-        if ($request->hasAny(['business_name', 'business_type', 'service_distance', 'location'])) {
-            $supplier->profile->update(
-                $request->only(['business_name', 'business_type', 'service_distance', 'location'])
-            );
+        // Get all profile fields that might be updated
+        $profileFields = array_filter($request->only([
+            'business_name',
+            'business_type',
+            'service_distance',
+            'business_categories',
+            'keywords',
+            'target_market',
+            'services_offered',
+            'website',
+            'additional_phones',
+            'business_address',
+            'latitude',
+            'longitude',
+            'working_hours',
+            'has_branches'
+        ]));
+
+        // Update profile if we have any fields to update
+        if (!empty($profileFields)) {
+            $supplier->profile->update($profileFields);
         }
+
+        // Reload supplier with fresh profile data
+        $supplier->load('profile');
 
         return response()->json([
             'message' => 'Profile updated successfully',
-            'supplier' => $supplier->fresh(['profile'])
+            'user' => $supplier
         ]);
     }
 }

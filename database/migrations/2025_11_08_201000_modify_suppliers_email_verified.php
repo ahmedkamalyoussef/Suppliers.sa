@@ -6,23 +6,22 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    /**
-     * Run the migrations.
-     */
     public function up(): void
     {
         Schema::table('suppliers', function (Blueprint $table) {
-            //
+            // Drop the old boolean column
+            $table->dropColumn('email_verified');
+            
+            // Add the new timestamp column
+            $table->timestamp('email_verified_at')->nullable();
         });
     }
 
-    /**
-     * Reverse the migrations.
-     */
     public function down(): void
     {
         Schema::table('suppliers', function (Blueprint $table) {
-            //
+            $table->dropColumn('email_verified_at');
+            $table->boolean('email_verified')->default(false);
         });
     }
 };

@@ -7,24 +7,45 @@ use Illuminate\Database\Eloquent\Model;
 class Otp extends Model
 {
     protected $fillable = [
-        'email',
-        'code',
-        'expires_at'
+        'user_id',
+        'supplier_id',
+        'otp',
+        'expires_at',
+        'email'
     ];
 
     protected $casts = [
         'expires_at' => 'datetime'
     ];
 
-    public static function generateFor($email)
+    public static function generateForUser($userId, $email = null)
     {
-        // Delete any existing OTPs for this email
-        self::where('email', $email)->delete();
+        // Delete any existing OTPs for this user
+        self::where('user_id', $userId)->delete();
 
-        // Generate new OTP
+        // Generate new OTP for user
         $otp = self::create([
+            'user_id' => $userId,
+            'supplier_id' => null,
             'email' => $email,
-            'code' => str_pad(random_int(0, 999999), 6, '0', STR_PAD_LEFT),
+            'otp' => str_pad(random_int(0, 999999), 6, '0', STR_PAD_LEFT),
+            'expires_at' => now()->addMinutes(10)
+        ]);
+
+        return $otp;
+    }
+
+    public static function generateForSupplier($supplierId, $email = null)
+    {
+        // Delete any existing OTPs for this supplier
+        self::where('supplier_id', $supplierId)->delete();
+
+        // Generate new OTP for supplier
+        $otp = self::create([
+            'user_id' => null,
+            'supplier_id' => $supplierId,
+            'email' => $email,
+            'otp' => str_pad(random_int(0, 999999), 6, '0', STR_PAD_LEFT),
             'expires_at' => now()->addMinutes(10)
         ]);
 
