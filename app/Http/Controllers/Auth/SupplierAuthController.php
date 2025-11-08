@@ -24,7 +24,7 @@ class SupplierAuthController extends Controller
             'business_name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'string', 'email', 'max:255', 'unique:suppliers'],
             'phone' => ['required', 'string', 'max:20'],
-            'password' => ['required', 'string', 'min:8'],
+            'password' => ['required', 'string', 'min:8', 'confirmed'],
             'referral_code' => ['nullable', 'string']
         ]);
 
@@ -36,10 +36,14 @@ class SupplierAuthController extends Controller
         }
 
         $supplier = Supplier::create([
+            'name' => $request->business_name,
             'email' => $request->email,
             'password' => Hash::make($request->password),
             'phone' => $request->phone,
-            'email_verified' => false,
+            // use email_verified_at to be compatible with unified verification column
+            'email_verified_at' => null,
+            // default profile image
+            'profile_image' => 'uploads/default.png',
             'referral_code' => $request->referral_code
         ]);
 

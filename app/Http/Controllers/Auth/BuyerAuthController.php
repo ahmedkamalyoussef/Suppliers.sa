@@ -21,6 +21,7 @@ class BuyerAuthController extends Controller
         $validator = Validator::make($request->all(), [
             'name' => 'required|string|max:255',
             'email' => 'required|string|email|max:255|unique:users',
+            'phone' => 'required|string|max:20',
             'password' => 'required|string|min:8|confirmed'
         ]);
 
@@ -38,7 +39,10 @@ class BuyerAuthController extends Controller
         $user = User::create([
             'name' => $request->name,
             'email' => $request->email,
+            'phone' => $request->phone,
             'password' => Hash::make($request->password),
+            // default profile image
+            'profile_image' => 'uploads/default.png',
         ]);
 
     // Generate OTP tied to this user id
@@ -96,7 +100,8 @@ class BuyerAuthController extends Controller
     public function updateProfile(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'name' => 'required|string|max:255',
+            'name' => 'string|max:255',
+            'phone'=> 'string|max:20',
         ]);
 
         if ($validator->fails()) {
@@ -104,7 +109,8 @@ class BuyerAuthController extends Controller
         }
 
         $user = $request->user();
-        $user->name = $request->name;
+        $user->name = $request->name ?? $user->name;
+        $user->phone = $request->phone ?? $user->phone;
         $user->save();
 
         return response()->json([
@@ -116,7 +122,7 @@ class BuyerAuthController extends Controller
     public function updateProfileImage(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'profile_image' => 'required|image|mimes:jpeg,png,jpg|max:2048'
+            'profile_image' => 'required|image|mimes:jpeg,png,jpg'
         ]);
 
         if ($validator->fails()) {
