@@ -11,46 +11,76 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
 use Laravel\Sanctum\PersonalAccessToken;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 
 class SupplierAuthController extends Controller
 {
     public function register(Request $request)
     {
-        $request->validate([
+        if (!$request->has('business_name') && $request->filled('businessName')) {
+            $request->merge(['business_name' => $request->input('businessName')]);
+        }
+
+        if (!$request->has('password_confirmation') && $request->filled('passwordConfirmation')) {
+            $request->merge(['password_confirmation' => $request->input('passwordConfirmation')]);
+        }
+
+        $validator = Validator::make($request->all(), [
             'business_name' => ['required', 'string', 'max:255'],
-            'email' => ['required', 'string', 'email', 'max:255', 'unique:suppliers'],
+            'email' => [
+                'required',
+                'string',
+                'email',
+                'max:255',
+                Rule::unique('suppliers', 'email'),
+                Rule::unique('admins', 'email'),
+            ],
             'phone' => ['required', 'string', 'max:20'],
-            'password' => ['required', 'string', 'min:8', 'confirmed'],
-            'referral_code' => ['nullable', 'string']
+            'password' => ['nullable', 'string', 'min:8', 'confirmed'],
         ]);
 
-        if (\App\Models\Admin::where('email', $request->email)->exists() || \App\Models\Supplier::where('email', $request->email)->exists()) {
-            return response()->json(['message' => 'Email is already used'], 422);
+        if ($validator->fails()) {
+            return response()->json($validator->errors(), 422);
         }
+
+        $password = $request->filled('password') ? $request->password : Str::random(12);
 
         $supplier = Supplier::create([
             'name' => $request->business_name,
             'email' => $request->email,
-            'password' => Hash::make($request->password),
+            'password' => Hash::make($password),
             'phone' => $request->phone,
             'email_verified_at' => null,
             'profile_image' => 'uploads/default.png',
-            'referral_code' => $request->referral_code
         ]);
 
         $profile = SupplierProfile::create([
             'supplier_id' => $supplier->id,
             'business_name' => $request->business_name,
-            'main_phone' => $request->phone
+            'main_phone' => $request->phone,
+            'contact_email' => $request->email,
         ]);
+
+        $otp = Otp::generateForSupplier($supplier->id, $supplier->email);
+        Mail::raw("Your verification code is: {$otp->otp}", function ($message) use ($supplier) {
+            $message->to($supplier->email)->subject('Email Verification OTP');
+        });
 
         $supplier->load('profile');
 
-        return response()->json([
-            'message' => 'Registration successful',
-            'user' => $supplier
-        ], 201);
+        $response = [
+            'message' => 'Registration successful. Please verify your email.',
+            'supplier' => $this->transformSupplier($supplier, false),
+            'generatedPassword' => $request->filled('password') ? null : $password,
+        ];
+
+        if (app()->environment('local', 'testing')) {
+            $response['debugOtp'] = $otp->otp;
+        }
+
+        return response()->json($response, 201);
     }
 
     public function login(Request $request)
@@ -72,9 +102,9 @@ class SupplierAuthController extends Controller
 
         return response()->json([
             'message' => 'Login successful',
-            'user' => $supplier,
-            'access_token' => $token,
-            'token_type' => 'Bearer'
+            'supplier' => $this->transformSupplier($supplier),
+            'accessToken' => $token,
+            'tokenType' => 'Bearer',
         ]);
     }
 
@@ -93,19 +123,23 @@ class SupplierAuthController extends Controller
         $request->validate(['email' => ['required', 'email']]);
 
         $supplier = Supplier::where('email', $request->email)->first();
-        if (!$supplier) return response()->json(['message' => 'Email not found'], 404);
-        
-        $otp = Otp::generateForSupplier($supplier->id);
-
-        Mail::raw("Your verification code is: {$otp->otp}", function ($message) use ($request) {
-            $message->to($request->email)->subject('Email Verification OTP');
-        });
-
-        if (app()->environment('local', 'testing')) {
-            return response()->json(['message' => 'OTP sent', 'otp' => $otp->otp]);
+        if (!$supplier) {
+            return response()->json(['message' => 'Email not found'], 404);
         }
 
-        return response()->json(['message' => 'OTP sent successfully']);
+        $otp = Otp::generateForSupplier($supplier->id, $supplier->email);
+
+        Mail::raw("Your verification code is: {$otp->otp}", function ($message) use ($supplier) {
+            $message->to($supplier->email)->subject('Email Verification OTP');
+        });
+
+        $response = ['message' => 'OTP sent successfully'];
+
+        if (app()->environment('local', 'testing')) {
+            $response['debugOtp'] = $otp->otp;
+        }
+
+        return response()->json($response);
     }
 
     public function verifyOtp(Request $request)
@@ -133,9 +167,9 @@ class SupplierAuthController extends Controller
 
         return response()->json([
             'message' => 'Email verified successfully',
-            'user' => $supplier,
-            'access_token' => $token,
-            'token_type' => 'Bearer'
+            'supplier' => $this->transformSupplier($supplier),
+            'accessToken' => $token,
+            'tokenType' => 'Bearer',
         ]);
     }
 
@@ -143,38 +177,149 @@ class SupplierAuthController extends Controller
     {
         $supplier = $request->user();
 
-        $request->validate([
-            'name' => ['sometimes','string','max:255'],
-            'phone' => ['sometimes','string','max:20'],
-            'business_name' => ['sometimes','string','max:255'],
-            'business_type' => ['sometimes','string','max:50'],
-            'service_distance' => ['sometimes','numeric','min:0'],
-            'business_categories' => ['sometimes','array'],
-            'keywords' => ['sometimes','array'],
-            'target_market' => ['sometimes','array'],
-            'services_offered' => ['sometimes','array'],
-            'website' => ['sometimes','string','nullable'],
-            'additional_phones' => ['sometimes','array'],
-            'business_address' => ['sometimes','string','nullable'],
-            'latitude' => ['sometimes','numeric','nullable'],
-            'longitude' => ['sometimes','numeric','nullable'],
-            'working_hours' => ['sometimes','array','nullable'],
-            'has_branches' => ['sometimes','boolean']
+        if (!($supplier instanceof Supplier)) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
+        $validator = Validator::make($request->all(), [
+            'name' => ['sometimes', 'string', 'max:255'],
+            'businessName' => ['sometimes', 'string', 'max:255'],
+            'businessType' => ['sometimes', 'string', 'max:100'],
+            'category' => ['sometimes', 'string', 'max:255'],
+            'categories' => ['sometimes', 'array'],
+            'categories.*' => ['string', 'max:255'],
+            'services' => ['sometimes', 'array'],
+            'services.*' => ['string', 'max:255'],
+            'productKeywords' => ['sometimes', 'array'],
+            'productKeywords.*' => ['string', 'max:255'],
+            'targetCustomers' => ['sometimes', 'array'],
+            'targetCustomers.*' => ['string', 'max:255'],
+            'serviceDistance' => ['sometimes', 'numeric', 'min:0'],
+            'additionalPhones' => ['sometimes', 'array'],
+            'workingHours' => ['sometimes', 'array'],
+            'website' => ['sometimes', 'nullable', 'string', 'max:255'],
+            'address' => ['sometimes', 'nullable', 'string'],
+            'description' => ['sometimes', 'nullable', 'string'],
+            'contactEmail' => [
+                'sometimes',
+                'email',
+                'max:255',
+                Rule::unique('suppliers', 'email')->ignore($supplier->id),
+                Rule::unique('admins', 'email'),
+            ],
+            'contactPhone' => ['sometimes', 'string', 'max:20'],
+            'mainPhone' => ['sometimes', 'nullable', 'string', 'max:20'],
+            'location.lat' => ['sometimes', 'numeric'],
+            'location.lng' => ['sometimes', 'numeric'],
+            'hasBranches' => ['sometimes', 'boolean'],
         ]);
 
-        $supplierFields = array_filter($request->only(['name','phone']));
-        if ($supplierFields) $supplier->update($supplierFields);
+        if ($validator->fails()) {
+            return response()->json($validator->errors(), 422);
+        }
 
-        $profileFields = array_filter($request->only([
-            'business_name','business_type','service_distance','business_categories','keywords',
-            'target_market','services_offered','website','additional_phones','business_address',
-            'latitude','longitude','working_hours','has_branches'
-        ]));
-        if ($profileFields) $supplier->profile->update($profileFields);
+        if ($request->filled('name')) {
+            $supplier->name = $request->name;
+        } elseif ($request->filled('businessName')) {
+            $supplier->name = $request->businessName;
+        }
 
-        $supplier->load('profile');
+        if ($request->filled('contactPhone')) {
+            $supplier->phone = $request->contactPhone;
+        }
 
-        return response()->json(['message'=>'Profile updated successfully','user'=>$supplier]);
+        if ($request->filled('contactEmail')) {
+            $supplier->email = $request->contactEmail;
+        }
+
+        $supplier->save();
+
+        $profile = $supplier->profile ?: SupplierProfile::create(['supplier_id' => $supplier->id]);
+
+        $profileData = [];
+
+        if ($request->has('businessName')) {
+            $profileData['business_name'] = $request->businessName;
+        }
+
+        if ($request->has('businessType')) {
+            $profileData['business_type'] = $request->businessType;
+        }
+
+        if ($request->has('categories') || $request->has('category')) {
+            $categories = $request->input('categories', []);
+            if (!$categories && $request->filled('category')) {
+                $categories = [$request->category];
+            }
+            $profileData['business_categories'] = $categories;
+        }
+
+        if ($request->has('services')) {
+            $profileData['services_offered'] = $request->input('services', []);
+        }
+
+        if ($request->has('productKeywords')) {
+            $profileData['keywords'] = $request->input('productKeywords', []);
+        }
+
+        if ($request->has('targetCustomers')) {
+            $profileData['target_market'] = $request->input('targetCustomers', []);
+        }
+
+        if ($request->has('serviceDistance')) {
+            $profileData['service_distance'] = $request->serviceDistance;
+        }
+
+        if ($request->has('website')) {
+            $profileData['website'] = $request->website;
+        }
+
+        if ($request->has('address')) {
+            $profileData['business_address'] = $request->address;
+        }
+
+        if ($request->has('mainPhone')) {
+            $profileData['main_phone'] = $request->mainPhone;
+        } elseif ($request->has('contactPhone')) {
+            $profileData['main_phone'] = $request->contactPhone;
+        }
+
+        if ($request->has('contactEmail')) {
+            $profileData['contact_email'] = $request->contactEmail;
+        }
+
+        if ($request->has('additionalPhones')) {
+            $profileData['additional_phones'] = $request->input('additionalPhones', []);
+        }
+
+        if ($request->has('workingHours')) {
+            $profileData['working_hours'] = $request->input('workingHours', []);
+        }
+
+        if ($request->has('description')) {
+            $profileData['description'] = $request->description;
+        }
+
+        if ($request->has('hasBranches')) {
+            $profileData['has_branches'] = (bool) $request->hasBranches;
+        }
+
+        if ($request->has('location')) {
+            $location = $request->input('location', []);
+            $profileData['latitude'] = data_get($location, 'lat');
+            $profileData['longitude'] = data_get($location, 'lng');
+        }
+
+        if (!empty($profileData)) {
+            $profile->update($profileData);
+        }
+
+        $supplier->load('profile', 'branches');
+
+        return response()->json([
+            'message' => 'Profile updated successfully',
+            'supplier' => $this->transformSupplier($supplier),
+        ]);
     }
 
     public function updateProfileImage(Request $request)
@@ -199,6 +344,9 @@ class SupplierAuthController extends Controller
 
         $supplier->load('profile');
 
-        return response()->json(['message'=>'Profile image updated successfully','user'=>$supplier]);
+        return response()->json([
+            'message' => 'Profile image updated successfully',
+            'supplier' => $this->transformSupplier($supplier, false),
+        ]);
     }
 }

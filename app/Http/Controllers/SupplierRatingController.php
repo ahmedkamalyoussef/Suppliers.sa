@@ -21,15 +21,16 @@ class SupplierRatingController extends Controller
             return response()->json(['message' => 'Only suppliers can create ratings'], 403);
         }
 
+        if (!$request->has('rated_supplier_id') && $request->filled('ratedSupplierId')) {
+            $request->merge(['rated_supplier_id' => $request->input('ratedSupplierId')]);
+        }
+
         $validator = Validator::make($request->all(), [
-            'rated_supplier_id' => 'required|exists:suppliers,id|different:me',
+            'rated_supplier_id' => 'required|exists:suppliers,id',
             'score' => 'required|integer|min:1|max:5',
             'comment' => 'nullable|string',
-        ], [
-            'rated_supplier_id.different' => 'You cannot rate yourself',
         ]);
 
-        // Custom 'different:me' handling
         if ((int) $request->rated_supplier_id === (int) $user->id) {
             $validator->after(function ($v) {
                 $v->errors()->add('rated_supplier_id', 'You cannot rate yourself');
@@ -54,7 +55,7 @@ class SupplierRatingController extends Controller
 
         return response()->json([
             'message' => 'Rating submitted and awaiting approval',
-            'rating' => $rating,
+            'rating' => $this->transformRating($rating),
         ], 201);
     }
 
@@ -70,7 +71,7 @@ class SupplierRatingController extends Controller
             if ($user->isSuperAdmin() || $user->hasPermission('content_management_supervise')) {
                 $rating->is_approved = true;
                 $rating->save();
-                return response()->json(['message' => 'Rating approved', 'rating' => $rating]);
+                return response()->json(['message' => 'Rating approved', 'rating' => $this->transformRating($rating)]);
             }
         }
 

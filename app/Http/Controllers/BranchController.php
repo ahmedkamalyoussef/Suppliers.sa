@@ -13,7 +13,7 @@ class BranchController extends Controller
      */
     public function index(Request $request)
     {
-        $branches = $request->user()->branches()->get();
+        $branches = $request->user()->branches()->get()->map(fn (Branch $branch) => $this->transformBranch($branch));
 
         return response()->json(['branches' => $branches]);
     }
@@ -23,26 +23,29 @@ class BranchController extends Controller
      */
     public function store(Request $request)
     {
+        $this->normalizeBranchPayload($request);
+
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'phone' => 'required|string|max:20',
-            'email' => 'required|email',
-            'address' => 'required|string',
+            'email' => 'nullable|email',
+            'address' => 'nullable|string',
             'manager_name' => 'required|string|max:255',
             'latitude' => 'required|numeric',
             'longitude' => 'required|numeric',
             'working_hours' => 'required|array',
             'special_services' => 'required|array',
             'status' => 'required|string|in:active,inactive',
+            'is_main_branch' => 'sometimes|boolean',
         ]);
 
         $branch = $request->user()->branches()->create(array_merge($validated, [
-            'is_main_branch' => false
+            'is_main_branch' => $validated['is_main_branch'] ?? false,
         ]));
 
         return response()->json([
             'message' => 'Branch created successfully',
-            'branch' => $branch
+            'branch' => $this->transformBranch($branch),
         ], 201);
     }
 
@@ -55,7 +58,7 @@ class BranchController extends Controller
             return response()->json(['message' => 'Unauthorized'], 403);
         }
 
-        return response()->json(['branch' => $branch]);
+        return response()->json(['branch' => $this->transformBranch($branch)]);
     }
 
     /**
@@ -67,24 +70,29 @@ class BranchController extends Controller
             return response()->json(['message' => 'Unauthorized'], 403);
         }
 
+        $this->normalizeBranchPayload($request);
+
         $validated = $request->validate([
             'name' => 'sometimes|string|max:255',
             'phone' => 'sometimes|string|max:20',
-            'email' => 'sometimes|email',
-            'address' => 'sometimes|string',
+            'email' => 'sometimes|nullable|email',
+            'address' => 'sometimes|nullable|string',
             'manager_name' => 'sometimes|string|max:255',
             'latitude' => 'sometimes|numeric',
             'longitude' => 'sometimes|numeric',
             'working_hours' => 'sometimes|array',
             'special_services' => 'sometimes|array',
             'status' => 'sometimes|string|in:active,inactive',
+            'is_main_branch' => 'sometimes|boolean',
         ]);
 
-        $branch->update(array_filter($validated));
+        $branch->update(array_filter($validated, function ($value) {
+            return !is_null($value);
+        }));
 
         return response()->json([
             'message' => 'Branch updated successfully',
-            'branch' => $branch->fresh()
+            'branch' => $this->transformBranch($branch->fresh()),
         ]);
     }
 
@@ -128,12 +136,41 @@ class BranchController extends Controller
 
             return response()->json([
                 'message' => 'Main branch updated successfully',
-                'branch' => $branch->fresh()
+                'branch' => $this->transformBranch($branch->fresh()),
             ]);
         } catch (\Exception $e) {
             DB::rollBack();
 
             return response()->json(['message' => 'Error setting main branch'], 500);
+        }
+    }
+
+    private function normalizeBranchPayload(Request $request): void
+    {
+        if (!$request->has('manager_name') && $request->filled('manager')) {
+            $request->merge(['manager_name' => $request->input('manager')]);
+        }
+
+        if ($request->has('location')) {
+            $location = $request->input('location', []);
+            if (data_get($location, 'lat') !== null) {
+                $request->merge(['latitude' => data_get($location, 'lat')]);
+            }
+            if (data_get($location, 'lng') !== null) {
+                $request->merge(['longitude' => data_get($location, 'lng')]);
+            }
+        }
+
+        if (!$request->has('working_hours') && $request->has('workingHours')) {
+            $request->merge(['working_hours' => $request->input('workingHours')]);
+        }
+
+        if (!$request->has('special_services') && $request->has('specialServices')) {
+            $request->merge(['special_services' => $request->input('specialServices')]);
+        }
+
+        if ($request->has('isMainBranch')) {
+            $request->merge(['is_main_branch' => (bool) $request->input('isMainBranch')]);
         }
     }
 }

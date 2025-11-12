@@ -37,4 +37,14 @@ class Supplier extends Authenticatable
     {
         return $this->hasMany(Branch::class);
     }
+
+    public function ratingsGiven()
+    {
+        return $this->hasMany(SupplierRating::class, 'rater_supplier_id');
+    }
+
+    public function ratingsReceived()
+    {
+        return $this->hasMany(SupplierRating::class, 'rated_supplier_id');
+    }
 }

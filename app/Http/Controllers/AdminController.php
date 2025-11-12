@@ -7,6 +7,7 @@ use App\Models\AdminPermission;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Str;
 
 class AdminController extends Controller
 {
@@ -52,13 +53,11 @@ class AdminController extends Controller
      * Get all admins
      */
     public function index()
-{
-    $admins = Admin::with('permissions')
-        ->where('role', '!=', 'super_admin')
-        ->get();
+    {
+        $admins = Admin::with('permissions')->get()->map(fn (Admin $admin) => $this->transformAdmin($admin));
 
-    return response()->json($admins);
-}
+        return response()->json(['admins' => $admins]);
+    }
 
 
     /**
@@ -67,7 +66,7 @@ class AdminController extends Controller
     public function show($id)
     {
         $admin = Admin::with('permissions')->findOrFail($id);
-        return response()->json($admin);
+        return response()->json(['admin' => $this->transformAdmin($admin)]);
     }
 
     /**
@@ -75,86 +74,61 @@ class AdminController extends Controller
      */
     public function store(Request $request)
     {
+        if (!$request->has('job_role') && $request->filled('jobRole')) {
+            $request->merge(['job_role' => $request->input('jobRole')]);
+        }
+
+        if (!$request->has('password_confirmation') && $request->filled('passwordConfirmation')) {
+            $request->merge(['password_confirmation' => $request->input('passwordConfirmation')]);
+        }
+
         $validator = Validator::make($request->all(), [
             'name' => 'required|string|max:255',
             'email' => 'required|string|email|max:255|unique:admins,email',
-            'password' => 'required|string|min:8|confirmed',
+            'password' => 'nullable|string|min:8|confirmed',
             'role' => 'required|in:admin,super_admin',
             'department' => 'nullable|string|max:255',
             'job_role' => 'nullable|string|max:255',
-            // Permissions (only for regular admin)
             'permissions' => 'nullable|array',
-            'permissions.user_management_view' => 'nullable|boolean',
-            'permissions.user_management_edit' => 'nullable|boolean',
-            'permissions.user_management_delete' => 'nullable|boolean',
-            'permissions.user_management_full' => 'nullable|boolean',
-            'permissions.content_management_view' => 'nullable|boolean',
-            'permissions.content_management_supervise' => 'nullable|boolean',
-            'permissions.content_management_delete' => 'nullable|boolean',
-            'permissions.analytics_view' => 'nullable|boolean',
-            'permissions.analytics_export' => 'nullable|boolean',
-            'permissions.reports_view' => 'nullable|boolean',
-            'permissions.reports_create' => 'nullable|boolean',
-            'permissions.system_manage' => 'nullable|boolean',
-            'permissions.system_settings' => 'nullable|boolean',
-            'permissions.system_backups' => 'nullable|boolean',
-            'permissions.support_manage' => 'nullable|boolean',
         ]);
 
         if ($validator->fails()) {
             return response()->json($validator->errors(), 422);
         }
-        if (\App\Models\Admin::where('email', $request->email)->exists() || \App\Models\Supplier::where('email', $request->email)->exists()) {
+
+        if ($request->role === 'admin' && (empty($request->department) || empty($request->job_role))) {
+            return response()->json([
+                'message' => 'Department and jobRole are required for regular admin',
+            ], 422);
+        }
+
+        if (Admin::where('email', $request->email)->exists()) {
             return response()->json(['message' => 'Email is already used'], 422);
         }
 
-        // Validate department and job_role for regular admin
-        if ($request->role === 'admin') {
-            if (empty($request->department) || empty($request->job_role)) {
-                return response()->json([
-                    'message' => 'Department and job_role are required for regular admin'
-                ], 422);
-            }
-        }
+        $password = $request->filled('password') ? $request->password : Str::random(12);
 
-        // Create admin
         $admin = Admin::create([
             'name' => $request->name,
             'email' => $request->email,
-            'password' => Hash::make($request->password),
+            'password' => Hash::make($password),
             'role' => $request->role,
             'department' => $request->department,
             'job_role' => $request->job_role,
-            'email_verified_at' => now(), // Auto-verify admins
+            'email_verified_at' => now(),
         ]);
 
-        // Create permissions only for regular admin
-        if ($request->role === 'admin' && $request->has('permissions')) {
-            AdminPermission::create([
-                'admin_id' => $admin->id,
-                'user_management_view' => $request->input('permissions.user_management_view', false),
-                'user_management_edit' => $request->input('permissions.user_management_edit', false),
-                'user_management_delete' => $request->input('permissions.user_management_delete', false),
-                'user_management_full' => $request->input('permissions.user_management_full', false),
-                'content_management_view' => $request->input('permissions.content_management_view', false),
-                'content_management_supervise' => $request->input('permissions.content_management_supervise', false),
-                'content_management_delete' => $request->input('permissions.content_management_delete', false),
-                'analytics_view' => $request->input('permissions.analytics_view', false),
-                'analytics_export' => $request->input('permissions.analytics_export', false),
-                'reports_view' => $request->input('permissions.reports_view', false),
-                'reports_create' => $request->input('permissions.reports_create', false),
-                'system_manage' => $request->input('permissions.system_manage', false),
-                'system_settings' => $request->input('permissions.system_settings', false),
-                'system_backups' => $request->input('permissions.system_backups', false),
-                'support_manage' => $request->input('permissions.support_manage', false),
-            ]);
+        if ($admin->role === 'admin') {
+            $permissions = $this->normalizePermissions($request->input('permissions', []));
+            AdminPermission::updateOrCreate(['admin_id' => $admin->id], $permissions);
         }
 
         $admin->load('permissions');
 
         return response()->json([
             'message' => 'Admin created successfully',
-            'admin' => $admin
+            'admin' => $this->transformAdmin($admin),
+            'generatedPassword' => $request->filled('password') ? null : $password,
         ], 201);
     }
 
@@ -165,101 +139,78 @@ class AdminController extends Controller
     {
         $admin = Admin::findOrFail($id);
 
+        if (!$request->has('job_role') && $request->filled('jobRole')) {
+            $request->merge(['job_role' => $request->input('jobRole')]);
+        }
+
+        if (!$request->has('password_confirmation') && $request->filled('passwordConfirmation')) {
+            $request->merge(['password_confirmation' => $request->input('passwordConfirmation')]);
+        }
+
         $validator = Validator::make($request->all(), [
             'name' => 'sometimes|string|max:255',
             'email' => 'sometimes|string|email|max:255|unique:admins,email,' . $id,
-            'password' => 'sometimes|string|min:8|confirmed',
+            'password' => 'nullable|string|min:8|confirmed',
             'role' => 'sometimes|in:admin,super_admin',
             'department' => 'nullable|string|max:255',
             'job_role' => 'nullable|string|max:255',
-            // Permissions (only for regular admin)
             'permissions' => 'nullable|array',
-            'permissions.user_management_view' => 'nullable|boolean',
-            'permissions.user_management_edit' => 'nullable|boolean',
-            'permissions.user_management_delete' => 'nullable|boolean',
-            'permissions.user_management_full' => 'nullable|boolean',
-            'permissions.content_management_view' => 'nullable|boolean',
-            'permissions.content_management_supervise' => 'nullable|boolean',
-            'permissions.content_management_delete' => 'nullable|boolean',
-            'permissions.analytics_view' => 'nullable|boolean',
-            'permissions.analytics_export' => 'nullable|boolean',
-            'permissions.reports_view' => 'nullable|boolean',
-            'permissions.reports_create' => 'nullable|boolean',
-            'permissions.system_manage' => 'nullable|boolean',
-            'permissions.system_settings' => 'nullable|boolean',
-            'permissions.system_backups' => 'nullable|boolean',
-            'permissions.support_manage' => 'nullable|boolean',
         ]);
 
         if ($validator->fails()) {
             return response()->json($validator->errors(), 422);
         }
-        if (\App\Models\Admin::where('email', $request->email)->exists() || \App\Models\Supplier::where('email', $request->email)->exists()) {
-            return response()->json(['message' => 'Email is already used'], 422);
-        }
-        // Update admin fields
-        if ($request->has('name')) {
+
+        if ($request->filled('name')) {
             $admin->name = $request->name;
         }
-        if ($request->has('email')) {
+
+        if ($request->filled('email') && $request->email !== $admin->email) {
             $admin->email = $request->email;
         }
-        if ($request->has('password')) {
-            $admin->password = Hash::make($request->password);
-        }
-        if ($request->has('role')) {
-            $admin->role = $request->role;
-        }
-        if ($request->has('department')) {
-            $admin->department = $request->department;
-        }
-        if ($request->has('job_role')) {
-            $admin->job_role = $request->job_role;
+
+        if ($request->filled('phone')) {
+            $admin->phone = $request->phone;
         }
 
-        // Validate department and job_role for regular admin
+        if ($request->filled('password')) {
+            $admin->password = Hash::make($request->password);
+        }
+
+        if ($request->filled('role')) {
+            $admin->role = $request->role;
+        }
+
         if ($admin->role === 'admin') {
-            if (empty($admin->department) || empty($admin->job_role)) {
+            if (empty($request->input('department', $admin->department)) || empty($request->input('job_role', $admin->job_role))) {
                 return response()->json([
-                    'message' => 'Department and job_role are required for regular admin'
+                    'message' => 'Department and jobRole are required for regular admin',
                 ], 422);
             }
         }
 
+        if ($request->has('department')) {
+            $admin->department = $request->department;
+        }
+
+        if ($request->has('job_role')) {
+            $admin->job_role = $request->job_role;
+        }
+
         $admin->save();
 
-        // Update permissions only for regular admin
-        if ($admin->role === 'admin' && $request->has('permissions')) {
-            $permissions = $admin->permissions;
-            
-            if (!$permissions) {
-                $permissions = AdminPermission::create(['admin_id' => $admin->id]);
-            }
-
-            $permissions->update([
-                'user_management_view' => $request->input('permissions.user_management_view', $permissions->user_management_view),
-                'user_management_edit' => $request->input('permissions.user_management_edit', $permissions->user_management_edit),
-                'user_management_delete' => $request->input('permissions.user_management_delete', $permissions->user_management_delete),
-                'user_management_full' => $request->input('permissions.user_management_full', $permissions->user_management_full),
-                'content_management_view' => $request->input('permissions.content_management_view', $permissions->content_management_view),
-                'content_management_supervise' => $request->input('permissions.content_management_supervise', $permissions->content_management_supervise),
-                'content_management_delete' => $request->input('permissions.content_management_delete', $permissions->content_management_delete),
-                'analytics_view' => $request->input('permissions.analytics_view', $permissions->analytics_view),
-                'analytics_export' => $request->input('permissions.analytics_export', $permissions->analytics_export),
-                'reports_view' => $request->input('permissions.reports_view', $permissions->reports_view),
-                'reports_create' => $request->input('permissions.reports_create', $permissions->reports_create),
-                'system_manage' => $request->input('permissions.system_manage', $permissions->system_manage),
-                'system_settings' => $request->input('permissions.system_settings', $permissions->system_settings),
-                'system_backups' => $request->input('permissions.system_backups', $permissions->system_backups),
-                'support_manage' => $request->input('permissions.support_manage', $permissions->support_manage),
-            ]);
+        if ($admin->role === 'admin') {
+            $permissions = $this->normalizePermissions($request->input('permissions', []));
+            AdminPermission::updateOrCreate(['admin_id' => $admin->id], $permissions);
+        } else {
+            $admin->permissions()->delete();
         }
 
         $admin->load('permissions');
 
         return response()->json([
             'message' => 'Admin updated successfully',
-            'admin' => $admin
+            'admin' => $this->transformAdmin($admin),
         ]);
     }
 
@@ -292,38 +243,53 @@ class AdminController extends Controller
     {
         $admin = $request->user();
 
-        // Only admins can access this
         if (!($admin instanceof Admin)) {
             return response()->json(['message' => 'Unauthorized. Admin access required.'], 403);
+        }
+
+        if (!$request->has('job_role') && $request->filled('jobRole')) {
+            $request->merge(['job_role' => $request->input('jobRole')]);
         }
 
         $validator = Validator::make($request->all(), [
             'name' => 'sometimes|string|max:255',
             'email' => 'sometimes|string|email|max:255|unique:admins,email,' . $admin->id,
+            'department' => 'sometimes|nullable|string|max:255',
+            'job_role' => 'sometimes|nullable|string|max:255',
         ]);
 
         if ($validator->fails()) {
             return response()->json($validator->errors(), 422);
         }
 
-        if (\App\Models\Admin::where('email', $request->email)->exists() || \App\Models\Supplier::where('email', $request->email)->exists()) {
-            return response()->json(['message' => 'Email is already used'], 422);
-        }
-        if ($request->has('name')) {
+        if ($request->filled('name')) {
             $admin->name = $request->name;
         }
-        // Regular admin cannot change email
-        if ($request->has('email') && $admin->isSuperAdmin()) {
+
+        if ($request->filled('department')) {
+            $admin->department = $request->department;
+        }
+
+        if ($request->filled('job_role')) {
+            $admin->job_role = $request->job_role;
+        }
+
+        if ($admin->isSuperAdmin() && $request->filled('email')) {
             $admin->email = $request->email;
         }
 
+        if ($admin->role === 'admin' && (empty($admin->department) || empty($admin->job_role))) {
+            return response()->json([
+                'message' => 'Department and jobRole are required for regular admin',
+            ], 422);
+        }
 
         $admin->save();
         $admin->load('permissions');
 
         return response()->json([
             'message' => 'Profile updated successfully',
-            'admin' => $admin
+            'admin' => $this->transformAdmin($admin),
         ]);
     }
 
@@ -338,7 +304,7 @@ class AdminController extends Controller
         }
 
         $validator = Validator::make($request->all(), [
-            'profile_image' => 'required|image|mimes:jpeg,png,jpg',
+            'profile_image' => 'required|image|mimes:jpeg,png,jpg|max:2048',
         ]);
         if ($validator->fails()) {
             return response()->json($validator->errors(), 422);
@@ -358,15 +324,16 @@ class AdminController extends Controller
         }
 
         $file = $request->file('profile_image');
-        $filename = \Illuminate\Support\Str::uuid() . '.' . $file->getClientOriginalExtension();
+        $filename = Str::uuid() . '.' . $file->getClientOriginalExtension();
         $file->move($destDir, $filename);
 
         $admin->profile_image = 'uploads/admins/' . $filename;
         $admin->save();
+        $admin->load('permissions');
 
         return response()->json([
             'message' => 'Profile image updated successfully',
-            'admin' => $admin,
+            'admin' => $this->transformAdmin($admin),
         ]);
     }
 
@@ -375,29 +342,90 @@ class AdminController extends Controller
      */
     public function registerSuper(Request $request)
     {
+        if (!$request->has('password_confirmation') && $request->filled('passwordConfirmation')) {
+            $request->merge(['password_confirmation' => $request->input('passwordConfirmation')]);
+        }
+
         $validator = Validator::make($request->all(), [
             'name' => 'required|string|max:255',
             'email' => 'required|string|email|max:255|unique:admins,email',
-            'password' => 'required|string|min:8|confirmed',
+            'password' => 'nullable|string|min:8|confirmed',
         ]);
+
         if ($validator->fails()) {
             return response()->json($validator->errors(), 422);
         }
-        if (\App\Models\Admin::where('email', $request->email)->exists() || \App\Models\Supplier::where('email', $request->email)->exists()) {
+
+        if (Admin::where('email', $request->email)->exists()) {
             return response()->json(['message' => 'Email is already used'], 422);
         }
+
+        $password = $request->filled('password') ? $request->password : Str::random(12);
 
         $admin = Admin::create([
             'name' => $request->name,
             'email' => $request->email,
-            'password' => Hash::make($request->password),
+            'password' => Hash::make($password),
             'role' => 'super_admin',
             'email_verified_at' => now(),
         ]);
 
         return response()->json([
             'message' => 'Super admin created successfully',
-            'admin' => $admin,
+            'admin' => $this->transformAdmin($admin),
+            'generatedPassword' => $request->filled('password') ? null : $password,
         ], 201);
     }
+
+    /**
+     * Normalize permissions from camelCase to snake_case for storage.
+     */
+    private function normalizePermissions(array $permissions = []): array
+    {
+        $defaults = [
+            'user_management_view' => false,
+            'user_management_edit' => false,
+            'user_management_delete' => false,
+            'user_management_full' => false,
+            'content_management_view' => false,
+            'content_management_supervise' => false,
+            'content_management_delete' => false,
+            'analytics_view' => false,
+            'analytics_export' => false,
+            'reports_view' => false,
+            'reports_create' => false,
+            'system_manage' => false,
+            'system_settings' => false,
+            'system_backups' => false,
+            'support_manage' => false,
+        ];
+
+        if (empty($permissions)) {
+            return $defaults;
+        }
+
+        // If already in snake_case structure, just merge with defaults
+        if (isset($permissions['user_management_view'])) {
+            return array_merge($defaults, array_intersect_key($permissions, $defaults));
+        }
+
+        return [
+            'user_management_view' => (bool) data_get($permissions, 'userManagement.view', false),
+            'user_management_edit' => (bool) data_get($permissions, 'userManagement.edit', false),
+            'user_management_delete' => (bool) data_get($permissions, 'userManagement.delete', false),
+            'user_management_full' => (bool) data_get($permissions, 'userManagement.full', false),
+            'content_management_view' => (bool) data_get($permissions, 'contentManagement.view', false),
+            'content_management_supervise' => (bool) data_get($permissions, 'contentManagement.supervise', false),
+            'content_management_delete' => (bool) data_get($permissions, 'contentManagement.delete', false),
+            'analytics_view' => (bool) data_get($permissions, 'analytics.view', false),
+            'analytics_export' => (bool) data_get($permissions, 'analytics.export', false),
+            'reports_view' => (bool) data_get($permissions, 'reports.view', false),
+            'reports_create' => (bool) data_get($permissions, 'reports.create', false),
+            'system_manage' => (bool) data_get($permissions, 'system.manage', false),
+            'system_settings' => (bool) data_get($permissions, 'system.settings', false),
+            'system_backups' => (bool) data_get($permissions, 'system.backups', false),
+            'support_manage' => (bool) data_get($permissions, 'support.manage', false),
+        ];
+    }
 }
+

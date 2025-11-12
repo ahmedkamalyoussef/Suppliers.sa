@@ -20,4 +20,14 @@ class SupplierRating extends Model
             'is_approved' => 'boolean',
         ];
     }
+
+    public function rater()
+    {
+        return $this->belongsTo(Supplier::class, 'rater_supplier_id');
+    }
+
+    public function rated()
+    {
+        return $this->belongsTo(Supplier::class, 'rated_supplier_id');
+    }
 }

@@ -60,15 +60,20 @@ class AuthController extends Controller
         if ($userInfo['type'] === 'admin') {
             $user->load('permissions');
         } elseif ($userInfo['type'] === 'supplier' && method_exists($user, 'profile')) {
-            $user->load('profile');
+            $user->load('profile', 'branches');
         }
+
+        $payloadKey = $userInfo['type'] === 'admin' ? 'admin' : 'supplier';
+        $payloadValue = $userInfo['type'] === 'admin'
+            ? $this->transformAdmin($user)
+            : $this->transformSupplier($user);
 
         return response()->json([
             'message' => 'Login successful',
-            'user_type' => $userInfo['type'],
-            'user' => $user,
-            'access_token' => $token,
-            'token_type' => 'Bearer'
+            'userType' => $userInfo['type'],
+            $payloadKey => $payloadValue,
+            'accessToken' => $token,
+            'tokenType' => 'Bearer',
         ]);
     }
 
@@ -147,14 +152,19 @@ class AuthController extends Controller
         if ($userInfo['type'] === 'admin') {
             $user->load('permissions');
         } elseif (method_exists($user, 'profile')) {
-            $user->load('profile');
+            $user->load('profile', 'branches');
         }
+
+        $payloadKey = $userInfo['type'] === 'admin' ? 'admin' : 'supplier';
+        $payloadValue = $userInfo['type'] === 'admin'
+            ? $this->transformAdmin($user)
+            : $this->transformSupplier($user);
 
         return response()->json([
             'message' => 'Email verified successfully',
-            'user' => $user,
-            'access_token' => $token,
-            'token_type' => 'Bearer'
+            $payloadKey => $payloadValue,
+            'accessToken' => $token,
+            'tokenType' => 'Bearer',
         ]);
     }
 }
