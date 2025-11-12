@@ -8,6 +8,7 @@ class Otp extends Model
 {
     protected $fillable = [
         'user_id',
+        'admin_id',
         'supplier_id',
         'otp',
         'expires_at',
@@ -35,6 +36,24 @@ class Otp extends Model
         return $otp;
     }
 
+    public static function generateForAdmin($adminId, $email = null)
+    {
+        // Delete any existing OTPs for this admin
+        self::where('admin_id', $adminId)->delete();
+
+        // Generate new OTP for admin
+        $otp = self::create([
+            'user_id' => null,
+            'admin_id' => $adminId,
+            'supplier_id' => null,
+            'email' => $email,
+            'otp' => str_pad(random_int(0, 999999), 6, '0', STR_PAD_LEFT),
+            'expires_at' => now()->addMinutes(10)
+        ]);
+
+        return $otp;
+    }
+
     public static function generateForSupplier($supplierId, $email = null)
     {
         // Delete any existing OTPs for this supplier
@@ -43,6 +62,7 @@ class Otp extends Model
         // Generate new OTP for supplier
         $otp = self::create([
             'user_id' => null,
+            'admin_id' => null,
             'supplier_id' => $supplierId,
             'email' => $email,
             'otp' => str_pad(random_int(0, 999999), 6, '0', STR_PAD_LEFT),

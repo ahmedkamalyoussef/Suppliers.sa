@@ -3,7 +3,7 @@
 namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
-use App\Models\User;
+use App\Models\Admin;
 use App\Models\Supplier;
 use App\Models\Otp;
 use App\Notifications\OtpNotification;
@@ -15,10 +15,10 @@ class PasswordController extends Controller
 {
     protected function findUserByEmail($email)
     {
-        // Check in buyers (users) table first
-        $user = User::where('email', $email)->first();
+        // Check in admins table first
+        $user = Admin::where('email', $email)->first();
         if ($user) {
-            return ['user' => $user, 'type' => 'buyer'];
+            return ['user' => $user, 'type' => 'admin'];
         }
 
         // Then check in suppliers table
@@ -40,7 +40,7 @@ class PasswordController extends Controller
         return response()->json($validator->errors(), 422);
     }
 
-    // البحث عن المستخدم سواء Buyer أو Supplier
+    // البحث عن المستخدم سواء Admin أو Supplier
     $userInfo = $this->findUserByEmail($request->email);
 
     if (!$userInfo) {
@@ -51,24 +51,10 @@ class PasswordController extends Controller
 
     $user = $userInfo['user'];
 
-    // حذف أي OTP موجود مسبقاً حسب نوع المستخدم
-    if ($userInfo['type'] === 'buyer') {
-        Otp::where('user_id', $user->id)->delete();
-
-        $otp = Otp::create([
-            'user_id' => $user->id,
-            'otp' => rand(100000, 999999),
-            'expires_at' => now()->addMinutes(10)
-        ]);
-    } else {
-        Otp::where('supplier_id', $user->id)->delete();
-
-        $otp = Otp::create([
-            'supplier_id' => $user->id,
-            'otp' => rand(100000, 999999),
-            'expires_at' => now()->addMinutes(10)
-        ]);
-    }
+    // Generate OTP based on user type
+    $otp = $userInfo['type'] === 'admin'
+        ? Otp::generateForAdmin($user->id, $user->email)
+        : Otp::generateForSupplier($user->id, $user->email);
 
     // إرسال OTP عبر الإيميل
     $user->notify(new OtpNotification($otp->otp));
@@ -91,7 +77,7 @@ class PasswordController extends Controller
         return response()->json($validator->errors(), 422);
     }
 
-    // البحث عن المستخدم سواء Buyer أو Supplier
+    // البحث عن المستخدم سواء Admin أو Supplier
     $userInfo = $this->findUserByEmail($request->email);
 
     if (!$userInfo) {
@@ -103,17 +89,15 @@ class PasswordController extends Controller
     $user = $userInfo['user'];
 
     // التحقق من OTP حسب نوع المستخدم
-    if ($userInfo['type'] === 'buyer') {
-        $otp = Otp::where('user_id', $user->id)
+    $otp = $userInfo['type'] === 'admin'
+        ? Otp::where('admin_id', $user->id)
+            ->where('otp', $request->otp)
+            ->where('expires_at', '>', now())
+            ->first()
+        : Otp::where('supplier_id', $user->id)
             ->where('otp', $request->otp)
             ->where('expires_at', '>', now())
             ->first();
-    } else {
-        $otp = Otp::where('supplier_id', $user->id)
-            ->where('otp', $request->otp)
-            ->where('expires_at', '>', now())
-            ->first();
-    }
 
     if (!$otp) {
         return response()->json([

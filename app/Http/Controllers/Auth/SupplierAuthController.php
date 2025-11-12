@@ -25,9 +25,8 @@ class SupplierAuthController extends Controller
             'referral_code' => ['nullable', 'string']
         ]);
 
-        // Prevent using an email already registered as a buyer
-        if (\App\Models\User::where('email', $request->email)->exists()) {
-            return response()->json(['message' => 'Email is already registered as a buyer.'], 422);
+        if (\App\Models\Admin::where('email', $request->email)->exists() || \App\Models\Supplier::where('email', $request->email)->exists()) {
+            return response()->json(['message' => 'Email is already used'], 422);
         }
 
         $supplier = Supplier::create([
@@ -93,14 +92,10 @@ class SupplierAuthController extends Controller
     {
         $request->validate(['email' => ['required', 'email']]);
 
-        $user = \App\Models\User::where('email', $request->email)->first();
-        if ($user) {
-            $otp = Otp::generateForUser($user->id);
-        } else {
-            $supplier = Supplier::where('email', $request->email)->first();
-            if (!$supplier) return response()->json(['message' => 'Email not found'], 404);
-            $otp = Otp::generateForSupplier($supplier->id);
-        }
+        $supplier = Supplier::where('email', $request->email)->first();
+        if (!$supplier) return response()->json(['message' => 'Email not found'], 404);
+        
+        $otp = Otp::generateForSupplier($supplier->id);
 
         Mail::raw("Your verification code is: {$otp->otp}", function ($message) use ($request) {
             $message->to($request->email)->subject('Email Verification OTP');
@@ -121,7 +116,7 @@ class SupplierAuthController extends Controller
         ]);
 
         $supplier = Supplier::where('email', $request->email)->first();
-        $otp = Otp::where('user_id', $supplier->id)
+        $otp = Otp::where('supplier_id', $supplier->id)
                   ->where('otp', $request->otp)
                   ->where('expires_at', '>', now())
                   ->first();

@@ -3,7 +3,7 @@
 namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
-use App\Models\User;
+use App\Models\Admin;
 use App\Models\Supplier;
 use App\Models\Otp;
 use App\Notifications\OtpNotification;
@@ -15,12 +15,12 @@ use Laravel\Sanctum\PersonalAccessToken;
 class AuthController extends Controller
 {
     /**
-     * Find a user by email in buyers or suppliers tables.
+     * Find a user by email in admins or suppliers tables.
      */
     protected function findUserByEmail(string $email)
     {
-        $user = User::where('email', $email)->first();
-        if ($user) return ['user' => $user, 'type' => 'buyer'];
+        $user = Admin::where('email', $email)->first();
+        if ($user) return ['user' => $user, 'type' => 'admin'];
 
         $user = Supplier::where('email', $email)->first();
         if ($user) return ['user' => $user, 'type' => 'supplier'];
@@ -29,7 +29,7 @@ class AuthController extends Controller
     }
 
     /**
-     * Login user (buyer or supplier)
+     * Login user (admin or supplier)
      */
     public function login(Request $request)
     {
@@ -48,13 +48,18 @@ class AuthController extends Controller
             return response()->json(['message' => 'Invalid credentials'], 401);
         }
 
-        if (!$user->email_verified_at) {
+        // For admins, email verification is optional (can be null)
+        // For suppliers, check email verification
+        if ($userInfo['type'] === 'supplier' && !$user->email_verified_at) {
             return response()->json(['message' => 'Email not verified'], 403);
         }
 
         $token = $user->createToken('auth_token')->plainTextToken;
 
-        if ($userInfo['type'] === 'supplier' && method_exists($user, 'profile')) {
+        // Load relationships
+        if ($userInfo['type'] === 'admin') {
+            $user->load('permissions');
+        } elseif ($userInfo['type'] === 'supplier' && method_exists($user, 'profile')) {
             $user->load('profile');
         }
 
@@ -81,7 +86,7 @@ class AuthController extends Controller
     }
 
     /**
-     * Send OTP to user email
+     * Send OTP to user email (for admins and suppliers)
      */
     public function sendOtp(Request $request)
     {
@@ -93,9 +98,9 @@ class AuthController extends Controller
 
         $user = $userInfo['user'];
 
-        // Delete existing OTPs & generate new one
-        $otp = $userInfo['type'] === 'buyer'
-            ? Otp::generateForUser($user->id, $user->email)
+        // Generate OTP based on user type
+        $otp = $userInfo['type'] === 'admin'
+            ? Otp::generateForAdmin($user->id, $user->email)
             : Otp::generateForSupplier($user->id, $user->email);
 
         $user->notify(new OtpNotification($otp->otp));
@@ -104,7 +109,7 @@ class AuthController extends Controller
     }
 
     /**
-     * Verify OTP
+     * Verify OTP (for admins and suppliers)
      */
     public function verifyOtp(Request $request)
     {
@@ -119,9 +124,16 @@ class AuthController extends Controller
 
         $user = $userInfo['user'];
 
-        $otp = $userInfo['type'] === 'buyer'
-            ? Otp::where('user_id', $user->id)->where('otp', $request->otp)->where('expires_at', '>', now())->first()
-            : Otp::where('supplier_id', $user->id)->where('otp', $request->otp)->where('expires_at', '>', now())->first();
+        // Find OTP based on user type
+        $otp = $userInfo['type'] === 'admin'
+            ? Otp::where('admin_id', $user->id)
+                ->where('otp', $request->otp)
+                ->where('expires_at', '>', now())
+                ->first()
+            : Otp::where('supplier_id', $user->id)
+                ->where('otp', $request->otp)
+                ->where('expires_at', '>', now())
+                ->first();
 
         if (!$otp) return response()->json(['message' => 'Invalid or expired OTP'], 422);
 
@@ -131,7 +143,10 @@ class AuthController extends Controller
 
         $token = $user->createToken('auth_token')->plainTextToken;
 
-        if ($userInfo['type'] === 'supplier' && method_exists($user, 'profile')) {
+        // Load relationships
+        if ($userInfo['type'] === 'admin') {
+            $user->load('permissions');
+        } elseif (method_exists($user, 'profile')) {
             $user->load('profile');
         }
 
