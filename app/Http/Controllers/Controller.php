@@ -5,7 +5,10 @@ namespace App\Http\Controllers;
 use App\Models\Admin;
 use App\Models\Branch;
 use App\Models\Supplier;
+use App\Models\SupplierDocument;
 use App\Models\SupplierRating;
+use App\Models\ContentReport;
+use App\Models\SupplierInquiry;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Foundation\Validation\ValidatesRequests;
 use Illuminate\Routing\Controller as BaseController;
@@ -14,7 +17,7 @@ use Illuminate\Support\Str;
 
 abstract class Controller extends BaseController
 {
-    use AuthorizesRequests, ValidatesRequests;
+	use AuthorizesRequests, ValidatesRequests;
 
     protected function transformAdmin(Admin $admin): array
     {
@@ -72,15 +75,25 @@ abstract class Controller extends BaseController
         }
 
         $profile = $supplier->profile;
+        $ratingAverage = $this->extractAggregate($supplier, ['rating_average', 'approved_ratings_avg_score', 'approved_ratings_avg']);
+        $ratingCount = $this->extractAggregate($supplier, ['rating_count', 'approved_ratings_count']);
 
         return array_filter([
             'id' => $supplier->id,
+            'slug' => $profile?->slug,
             'name' => $supplier->name,
             'email' => $supplier->email,
             'phone' => $supplier->phone,
             'profileImage' => $this->mediaUrl($supplier->profile_image),
             'emailVerifiedAt' => optional($supplier->email_verified_at)->toIso8601String(),
+            'status' => $supplier->status,
+            'plan' => $supplier->plan,
+            'lastSeenAt' => optional($supplier->last_seen_at)->toIso8601String(),
+            'profileCompletion' => $this->calculateProfileCompletion($supplier),
+            'rating' => $ratingAverage !== null ? round((float) $ratingAverage, 2) : null,
+            'reviewsCount' => $ratingCount !== null ? (int) $ratingCount : null,
             'profile' => $profile ? array_filter([
+                'slug' => $profile->slug,
                 'businessName' => $profile->business_name,
                 'businessType' => $profile->business_type,
                 'category' => $profile->business_categories[0] ?? null,
@@ -108,6 +121,32 @@ abstract class Controller extends BaseController
         });
     }
 
+    protected function transformSupplierSummary(Supplier $supplier): array
+    {
+        $supplier->loadMissing('profile');
+        $profile = $supplier->profile;
+        $ratingAverage = $this->extractAggregate($supplier, ['rating_average', 'approved_ratings_avg_score', 'approved_ratings_avg']);
+        $ratingCount = $this->extractAggregate($supplier, ['rating_count', 'approved_ratings_count']);
+
+        return array_filter([
+            'id' => $supplier->id,
+            'name' => $supplier->name,
+            'profileImage' => $this->mediaUrl($supplier->profile_image),
+            'slug' => $profile?->slug,
+            'category' => $profile?->business_categories[0] ?? null,
+            'categories' => $profile?->business_categories ?? [],
+            'businessType' => $profile?->business_type,
+            'address' => $profile?->business_address,
+            'serviceDistance' => $profile?->service_distance !== null ? (float) $profile->service_distance : null,
+            'rating' => $ratingAverage !== null ? round((float) $ratingAverage, 2) : null,
+            'reviewsCount' => $ratingCount !== null ? (int) $ratingCount : null,
+            'status' => $supplier->status,
+            'plan' => $supplier->plan,
+        ], function ($value) {
+            return $value !== null;
+        });
+    }
+
     protected function transformBranch(Branch $branch): array
     {
         return array_filter([
@@ -123,7 +162,7 @@ abstract class Controller extends BaseController
                 'lat' => $branch->latitude ? (float) $branch->latitude : null,
                 'lng' => $branch->longitude ? (float) $branch->longitude : null,
             ] : null,
-            'workingHours' => $branch->working_hours ?? [],
+            'workingHours' => $branch->working_hours ?? $this->defaultBranchHours(),
             'specialServices' => $branch->special_services ?? [],
             'createdAt' => optional($branch->created_at)->toIso8601String(),
             'updatedAt' => optional($branch->updated_at)->toIso8601String(),
@@ -134,17 +173,81 @@ abstract class Controller extends BaseController
 
     protected function transformRating(SupplierRating $rating): array
     {
-        $rating->loadMissing(['rater', 'rated']);
+        $rating->loadMissing(['rater', 'rated', 'moderatedBy', 'flaggedBy']);
 
-        return [
+        return array_filter([
             'id' => $rating->id,
             'score' => (int) $rating->score,
             'comment' => $rating->comment,
+            'reviewerName' => $rating->reviewer_name,
+            'reviewerEmail' => $rating->reviewer_email,
             'isApproved' => (bool) $rating->is_approved,
+            'status' => $rating->status,
+            'moderatedAt' => optional($rating->moderated_at)->toIso8601String(),
+            'moderationNotes' => $rating->moderation_notes,
+            'moderatedBy' => $rating->moderatedBy ? $this->transformAdmin($rating->moderatedBy) : null,
+            'flaggedAt' => optional($rating->flagged_at)->toIso8601String(),
+            'flaggedBy' => $rating->flaggedBy ? $this->transformAdmin($rating->flaggedBy) : null,
             'raterSupplier' => $rating->rater ? $this->transformSupplier($rating->rater, false) : null,
-            'ratedSupplier' => $rating->rated ? $this->transformSupplier($rating->rated, false) : null,
+            'supplier' => $rating->rated ? $this->transformSupplier($rating->rated, false) : null,
             'createdAt' => optional($rating->created_at)->toIso8601String(),
-        ];
+            'businessName' => $rating->rated?->profile?->business_name ?? $rating->rated?->name,
+            'customerName' => $rating->reviewer_name ?? optional($rating->rater)->name,
+            'rating' => (int) $rating->score,
+            'reviewText' => $rating->comment,
+            'submissionDate' => optional($rating->created_at)->toIso8601String(),
+            'flagged' => $rating->status === 'flagged',
+        ], function ($value) {
+            return $value !== null;
+        });
+    }
+
+    protected function transformInquiry(SupplierInquiry $inquiry): array
+    {
+        $inquiry->loadMissing('handledBy');
+
+        return array_filter([
+            'id' => $inquiry->id,
+            'from' => $inquiry->name,
+            'company' => $inquiry->company,
+            'subject' => $inquiry->subject,
+            'message' => $inquiry->message,
+            'contact' => $inquiry->email,
+            'phone' => $inquiry->phone,
+            'status' => $inquiry->status,
+            'isUnread' => (bool) $inquiry->is_unread,
+            'lastResponse' => $inquiry->last_response,
+            'lastResponseAt' => optional($inquiry->last_response_at)->toIso8601String(),
+            'handledBy' => $inquiry->handledBy ? $this->transformAdmin($inquiry->handledBy) : null,
+            'handledAt' => optional($inquiry->handled_at)->toIso8601String(),
+            'receivedAt' => optional($inquiry->created_at)->toIso8601String(),
+        ], function ($value) {
+            return $value !== null;
+        });
+    }
+
+    protected function transformDocument(SupplierDocument $document): array
+    {
+        $document->loadMissing('reviewer');
+
+        return array_filter([
+            'id' => $document->id,
+            'businessName' => $document->supplier?->profile?->business_name ?? $document->supplier?->name,
+            'ownerName' => $document->supplier?->name,
+            'documentType' => $document->document_type,
+            'crNumber' => $document->reference_number,
+            'referenceNumber' => $document->reference_number,
+            'uploadDate' => optional($document->created_at)->toIso8601String(),
+            'issueDate' => optional($document->issue_date)->toDateString(),
+            'expiryDate' => optional($document->expiry_date)->toDateString(),
+            'status' => $document->status,
+            'notes' => $document->notes,
+            'fileUrl' => $this->mediaUrl($document->file_path),
+            'reviewedAt' => optional($document->reviewed_at)->toIso8601String(),
+            'reviewer' => optional($document->reviewer)->name,
+        ], function ($value) {
+            return $value !== null;
+        });
     }
 
     protected function mediaUrl(?string $path): ?string
@@ -158,5 +261,95 @@ abstract class Controller extends BaseController
         }
 
         return URL::to($path);
+    }
+
+    protected function transformReport(ContentReport $report): array
+    {
+        $report->loadMissing(['targetSupplier.profile', 'reporter', 'handler']);
+
+        $targetSupplier = $report->targetSupplier ? $this->transformSupplier($report->targetSupplier, false) : null;
+
+        return array_filter([
+            'id' => $report->id,
+            'reportType' => $report->report_type,
+            'type' => $report->report_type,
+            'status' => $report->status,
+            'reason' => $report->reason,
+            'details' => $report->details,
+            'content' => $report->details,
+            'reportedByName' => $report->reported_by_name ?? optional($report->reporter)->name,
+            'reportedByEmail' => $report->reported_by_email ?? optional($report->reporter)->email,
+            'reportedBy' => $report->reported_by_name ?? optional($report->reporter)->name,
+            'business' => $targetSupplier['profile']['businessName'] ?? $targetSupplier['name'] ?? null,
+            'targetSupplier' => $targetSupplier,
+            'reportDate' => optional($report->created_at)->toIso8601String(),
+            'handledAt' => optional($report->handled_at)->toIso8601String(),
+            'handledBy' => $report->handler ? $this->transformAdmin($report->handler) : null,
+            'resolutionNotes' => $report->resolution_notes,
+            'createdAt' => optional($report->created_at)->toIso8601String(),
+        ], function ($value) {
+            return $value !== null;
+        });
+    }
+
+    protected function calculateProfileCompletion(Supplier $supplier): int
+    {
+        $supplier->loadMissing('profile', 'branches');
+        $profile = $supplier->profile;
+
+        $checks = [
+            (bool) $supplier->phone,
+            (bool) $profile?->business_name,
+            (bool) $profile?->business_type,
+            !empty($profile?->business_categories),
+            !empty($profile?->services_offered),
+            (bool) $profile?->description,
+            (bool) $profile?->website,
+            (bool) $profile?->business_address,
+            !empty($profile?->working_hours),
+            !empty($profile?->additional_phones),
+            !empty($profile?->keywords),
+            (bool) $supplier->profile_image,
+            $supplier->branches()->exists(),
+        ];
+
+        $total = count($checks);
+        $completed = count(array_filter($checks));
+
+        if ($total === 0) {
+            return 0;
+        }
+
+        return (int) round(($completed / $total) * 100);
+    }
+
+    private function extractAggregate(object $model, array $keys): mixed
+    {
+        foreach ($keys as $key) {
+            if (isset($model->$key)) {
+                return $model->$key;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @return array<string, array{open:string,close:string,closed:bool}>
+     */
+    protected function defaultBranchHours(): array
+    {
+        $days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+        $hours = [];
+
+        foreach ($days as $day) {
+            $hours[$day] = [
+                'open' => $day === 'sunday' ? '10:00' : '09:00',
+                'close' => $day === 'sunday' ? '16:00' : '18:00',
+                'closed' => $day === 'sunday',
+            ];
+        }
+
+        return $hours;
     }
 }

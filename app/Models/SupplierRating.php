@@ -11,13 +11,23 @@ class SupplierRating extends Model
         'rated_supplier_id',
         'score',
         'comment',
+        'reviewer_name',
+        'reviewer_email',
         'is_approved',
+        'status',
+        'moderated_by_admin_id',
+        'moderated_at',
+        'moderation_notes',
+        'flagged_by_admin_id',
+        'flagged_at',
     ];
 
     protected function casts(): array
     {
         return [
             'is_approved' => 'boolean',
+            'moderated_at' => 'datetime',
+            'flagged_at' => 'datetime',
         ];
     }
 
@@ -29,5 +39,15 @@ class SupplierRating extends Model
     public function rated()
     {
         return $this->belongsTo(Supplier::class, 'rated_supplier_id');
+    }
+
+    public function moderatedBy()
+    {
+        return $this->belongsTo(Admin::class, 'moderated_by_admin_id');
+    }
+
+    public function flaggedBy()
+    {
+        return $this->belongsTo(Admin::class, 'flagged_by_admin_id');
     }
 }

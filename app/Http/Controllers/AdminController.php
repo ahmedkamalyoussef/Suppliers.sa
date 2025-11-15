@@ -53,11 +53,11 @@ class AdminController extends Controller
      * Get all admins
      */
     public function index()
-    {
+{
         $admins = Admin::with('permissions')->get()->map(fn (Admin $admin) => $this->transformAdmin($admin));
 
         return response()->json(['admins' => $admins]);
-    }
+}
 
 
     /**

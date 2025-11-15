@@ -28,19 +28,24 @@ class BranchController extends Controller
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'phone' => 'required|string|max:20',
-            'email' => 'nullable|email',
-            'address' => 'nullable|string',
+            'email' => 'nullable|email|max:255',
+            'address' => 'nullable|string|max:500',
             'manager_name' => 'required|string|max:255',
-            'latitude' => 'required|numeric',
-            'longitude' => 'required|numeric',
-            'working_hours' => 'required|array',
-            'special_services' => 'required|array',
-            'status' => 'required|string|in:active,inactive',
+            'latitude' => 'nullable|numeric',
+            'longitude' => 'nullable|numeric',
+            'working_hours' => 'nullable|array',
+            'special_services' => 'nullable|array',
+            'status' => 'nullable|string|in:active,inactive',
             'is_main_branch' => 'sometimes|boolean',
         ]);
 
         $branch = $request->user()->branches()->create(array_merge($validated, [
+            'status' => $validated['status'] ?? 'active',
+            'working_hours' => $validated['working_hours'] ?? $this->defaultWorkingHours(),
+            'special_services' => $validated['special_services'] ?? [],
             'is_main_branch' => $validated['is_main_branch'] ?? false,
+            'latitude' => $validated['latitude'] ?? null,
+            'longitude' => $validated['longitude'] ?? null,
         ]));
 
         return response()->json([
@@ -75,20 +80,30 @@ class BranchController extends Controller
         $validated = $request->validate([
             'name' => 'sometimes|string|max:255',
             'phone' => 'sometimes|string|max:20',
-            'email' => 'sometimes|nullable|email',
-            'address' => 'sometimes|nullable|string',
+            'email' => 'sometimes|nullable|email|max:255',
+            'address' => 'sometimes|nullable|string|max:500',
             'manager_name' => 'sometimes|string|max:255',
-            'latitude' => 'sometimes|numeric',
-            'longitude' => 'sometimes|numeric',
-            'working_hours' => 'sometimes|array',
-            'special_services' => 'sometimes|array',
-            'status' => 'sometimes|string|in:active,inactive',
+            'latitude' => 'sometimes|nullable|numeric',
+            'longitude' => 'sometimes|nullable|numeric',
+            'working_hours' => 'sometimes|nullable|array',
+            'special_services' => 'sometimes|nullable|array',
+            'status' => 'sometimes|nullable|string|in:active,inactive',
             'is_main_branch' => 'sometimes|boolean',
         ]);
 
-        $branch->update(array_filter($validated, function ($value) {
-            return !is_null($value);
-        }));
+        $payload = array_filter($validated, function ($value) {
+            return $value !== null;
+        });
+
+        if (!array_key_exists('working_hours', $payload) && !$branch->working_hours) {
+            $payload['working_hours'] = $this->defaultWorkingHours();
+        }
+
+        if (!array_key_exists('special_services', $payload) && !$branch->special_services) {
+            $payload['special_services'] = [];
+        }
+
+        $branch->update($payload);
 
         return response()->json([
             'message' => 'Branch updated successfully',
@@ -172,5 +187,28 @@ class BranchController extends Controller
         if ($request->has('isMainBranch')) {
             $request->merge(['is_main_branch' => (bool) $request->input('isMainBranch')]);
         }
+
+        if (!$request->has('status') && $request->isMethod('post')) {
+            $request->merge(['status' => 'active']);
+        }
+    }
+
+    /**
+     * @return array<string, array{open:string,close:string,closed:bool}>
+     */
+    private function defaultWorkingHours(): array
+    {
+        $days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+        $hours = [];
+
+        foreach ($days as $day) {
+            $hours[$day] = [
+                'open' => $day === 'sunday' ? '10:00' : '09:00',
+                'close' => $day === 'sunday' ? '16:00' : '18:00',
+                'closed' => $day === 'sunday',
+            ];
+        }
+
+        return $hours;
     }
 }

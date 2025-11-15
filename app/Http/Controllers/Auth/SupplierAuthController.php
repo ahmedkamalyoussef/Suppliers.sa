@@ -38,22 +38,23 @@ class SupplierAuthController extends Controller
                 Rule::unique('admins', 'email'),
             ],
             'phone' => ['required', 'string', 'max:20'],
-            'password' => ['nullable', 'string', 'min:8', 'confirmed'],
+            'password' => ['required', 'string', 'min:6', 'confirmed'],
+            'password_confirmation' => ['required', 'string', 'min:6'],
         ]);
 
         if ($validator->fails()) {
             return response()->json($validator->errors(), 422);
         }
 
-        $password = $request->filled('password') ? $request->password : Str::random(12);
-
         $supplier = Supplier::create([
             'name' => $request->business_name,
             'email' => $request->email,
-            'password' => Hash::make($password),
+            'password' => Hash::make($request->password),
             'phone' => $request->phone,
             'email_verified_at' => null,
             'profile_image' => 'uploads/default.png',
+            'plan' => 'Basic',
+            'status' => 'pending',
         ]);
 
         $profile = SupplierProfile::create([
@@ -61,7 +62,11 @@ class SupplierAuthController extends Controller
             'business_name' => $request->business_name,
             'main_phone' => $request->phone,
             'contact_email' => $request->email,
+            'slug' => null,
         ]);
+
+        $profile->slug = $this->generateUniqueSupplierSlug($profile->business_name, $profile->id);
+        $profile->save();
 
         $otp = Otp::generateForSupplier($supplier->id, $supplier->email);
         Mail::raw("Your verification code is: {$otp->otp}", function ($message) use ($supplier) {
@@ -73,7 +78,6 @@ class SupplierAuthController extends Controller
         $response = [
             'message' => 'Registration successful. Please verify your email.',
             'supplier' => $this->transformSupplier($supplier, false),
-            'generatedPassword' => $request->filled('password') ? null : $password,
         ];
 
         if (app()->environment('local', 'testing')) {
@@ -98,6 +102,7 @@ class SupplierAuthController extends Controller
         }
 
         $token = $supplier->createToken('auth-token')->plainTextToken;
+        $supplier->forceFill(['last_seen_at' => now()])->save();
         $supplier->load('profile');
 
         return response()->json([
@@ -126,7 +131,7 @@ class SupplierAuthController extends Controller
         if (!$supplier) {
             return response()->json(['message' => 'Email not found'], 404);
         }
-
+        
         $otp = Otp::generateForSupplier($supplier->id, $supplier->email);
 
         Mail::raw("Your verification code is: {$otp->otp}", function ($message) use ($supplier) {
@@ -158,6 +163,7 @@ class SupplierAuthController extends Controller
         if (!$otp || !$otp->isValid()) return response()->json(['message' => 'Invalid or expired OTP'], 400);
 
         $supplier->email_verified_at = now();
+        $supplier->status = 'active';
         $supplier->save();
 
         $otp->delete();
@@ -310,6 +316,10 @@ class SupplierAuthController extends Controller
             $profileData['longitude'] = data_get($location, 'lng');
         }
 
+        if (!$profile->slug && isset($profileData['business_name'])) {
+            $profileData['slug'] = $this->generateUniqueSupplierSlug($profileData['business_name'], $profile->id);
+        }
+
         if (!empty($profileData)) {
             $profile->update($profileData);
         }
@@ -344,9 +354,26 @@ class SupplierAuthController extends Controller
 
         $supplier->load('profile');
 
-        return response()->json([
-            'message' => 'Profile image updated successfully',
-            'supplier' => $this->transformSupplier($supplier, false),
-        ]);
+        return response()->json(['message'=>'Profile image updated successfully','supplier'=>$this->transformSupplier($supplier, false)]);
+    }
+
+    private function generateUniqueSupplierSlug(string $name, ?int $profileId = null): string
+    {
+        $base = Str::slug($name);
+        if (!$base) {
+            $base = 'supplier';
+        }
+
+        $slug = $base;
+        $counter = 1;
+        while (
+            SupplierProfile::where('slug', $slug)
+                ->when($profileId, fn ($query) => $query->where('id', '!=', $profileId))
+                ->exists()
+        ) {
+            $slug = $base.'-'.$counter++;
+        }
+
+        return $slug;
     }
 }

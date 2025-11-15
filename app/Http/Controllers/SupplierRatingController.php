@@ -41,17 +41,16 @@ class SupplierRatingController extends Controller
             return response()->json($validator->errors(), 422);
         }
 
-        $rating = SupplierRating::updateOrCreate(
-            [
+        $rating = SupplierRating::create([
                 'rater_supplier_id' => $user->id,
                 'rated_supplier_id' => $request->rated_supplier_id,
-            ],
-            [
                 'score' => $request->score,
                 'comment' => $request->comment,
+            'reviewer_name' => $user->name,
+            'reviewer_email' => $user->email,
                 'is_approved' => false,
-            ]
-        );
+            'status' => 'pending_review',
+        ]);
 
         return response()->json([
             'message' => 'Rating submitted and awaiting approval',
@@ -69,9 +68,17 @@ class SupplierRatingController extends Controller
         // Super admin or admin with supervise permission
         if ($user instanceof Admin) {
             if ($user->isSuperAdmin() || $user->hasPermission('content_management_supervise')) {
-                $rating->is_approved = true;
-                $rating->save();
-                return response()->json(['message' => 'Rating approved', 'rating' => $this->transformRating($rating)]);
+                $rating->forceFill([
+                    'is_approved' => true,
+                    'status' => 'approved',
+                    'moderated_by_admin_id' => $user->id,
+                    'moderated_at' => now(),
+                ])->save();
+
+                return response()->json([
+                    'message' => 'Rating approved',
+                    'rating' => $this->transformRating($rating->fresh()),
+                ]);
             }
         }
 

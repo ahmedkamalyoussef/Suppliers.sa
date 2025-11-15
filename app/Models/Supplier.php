@@ -16,7 +16,10 @@ class Supplier extends Authenticatable
         'email',
         'password',
         'phone',
-        'profile_image'
+        'profile_image',
+        'plan',
+        'status',
+        'last_seen_at',
     ];
 
     protected $hidden = [
@@ -25,7 +28,8 @@ class Supplier extends Authenticatable
     ];
 
     protected $casts = [
-        'email_verified_at' => 'datetime'
+        'email_verified_at' => 'datetime',
+        'last_seen_at' => 'datetime',
     ];
 
     public function profile()
@@ -46,5 +50,30 @@ class Supplier extends Authenticatable
     public function ratingsReceived()
     {
         return $this->hasMany(SupplierRating::class, 'rated_supplier_id');
+    }
+
+    public function approvedRatings()
+    {
+        return $this->hasMany(SupplierRating::class, 'rated_supplier_id')->where('is_approved', true);
+    }
+
+    public function inquiries()
+    {
+        return $this->hasMany(SupplierInquiry::class);
+    }
+
+    public function documents()
+    {
+        return $this->hasMany(SupplierDocument::class);
+    }
+
+    public function reportsReceived()
+    {
+        return $this->hasMany(ContentReport::class, 'target_supplier_id');
+    }
+
+    public function reportsSubmitted()
+    {
+        return $this->hasMany(ContentReport::class, 'reported_by_supplier_id');
     }
 }
