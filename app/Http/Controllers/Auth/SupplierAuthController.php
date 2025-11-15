@@ -6,9 +6,9 @@ use App\Http\Controllers\Controller;
 use App\Models\Supplier;
 use App\Models\SupplierProfile;
 use App\Models\Otp;
+use App\Notifications\OtpNotification;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\Mail;
 use Laravel\Sanctum\PersonalAccessToken;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Validator;
@@ -69,9 +69,7 @@ class SupplierAuthController extends Controller
         $profile->save();
 
         $otp = Otp::generateForSupplier($supplier->id, $supplier->email);
-        Mail::raw("Your verification code is: {$otp->otp}", function ($message) use ($supplier) {
-            $message->to($supplier->email)->subject('Email Verification OTP');
-        });
+        $supplier->notify(new OtpNotification($otp->otp, 10));
 
         $supplier->load('profile');
 
@@ -133,10 +131,7 @@ class SupplierAuthController extends Controller
         }
         
         $otp = Otp::generateForSupplier($supplier->id, $supplier->email);
-
-        Mail::raw("Your verification code is: {$otp->otp}", function ($message) use ($supplier) {
-            $message->to($supplier->email)->subject('Email Verification OTP');
-        });
+        $supplier->notify(new OtpNotification($otp->otp, 10));
 
         $response = ['message' => 'OTP sent successfully'];
 
