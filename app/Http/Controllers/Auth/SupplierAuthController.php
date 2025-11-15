@@ -51,7 +51,7 @@ class SupplierAuthController extends Controller
             'email' => $request->email,
             'password' => Hash::make($request->password),
             'phone' => $request->phone,
-            'email_verified_at' => null,
+            'email_verified_at' => now(),
             'profile_image' => 'uploads/default.png',
             'plan' => 'Basic',
             'status' => 'pending',
