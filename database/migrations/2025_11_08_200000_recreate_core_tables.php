@@ -130,7 +130,7 @@ return new class extends Migration
 
         if (!Schema::hasTable('cache')) {
             Schema::create('cache', function (Blueprint $table) {
-                $table->string('key')->unique();
+                $table->string('key')->primary();
                 $table->longText('value');
                 $table->integer('expiration');
             });
