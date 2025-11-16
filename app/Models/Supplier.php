@@ -20,6 +20,7 @@ class Supplier extends Authenticatable
         'plan',
         'status',
         'last_seen_at',
+        'email_verified_at',
     ];
 
     protected $hidden = [
