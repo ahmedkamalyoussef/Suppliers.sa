@@ -22,9 +22,83 @@
 
 ## 🌟 Introduction
 
-Suppliers Management System is a robust Laravel-based platform designed to streamline supplier management, document handling, and service tracking. It provides a seamless experience for both suppliers and administrators with intuitive dashboards and powerful features.
+Suppliers Management System is a comprehensive, multi-tenant platform built with Laravel, designed to streamline the entire supplier lifecycle from onboarding to service delivery. The system provides a robust set of tools for managing supplier relationships, document verification, and service quality assurance.
 
-## ✨ Features
+### 🏗️ System Architecture
+
+The application follows a modern, scalable architecture:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                     Client Applications                      │
+│  ┌─────────────┐      ┌─────────────┐      ┌─────────────┐  │
+│  │ Web Portal  │      │ Mobile App  │      │  Admin Panel│  │
+│  └──────┬──────┘      └──────┬──────┘      └──────┬──────┘  │
+└─────────┼────────────────────┼────────────────────┼─────────┘
+          │                    │                    │          
+┌─────────▼────────────────────▼────────────────────▼─────────┐
+│                                                             │
+│                  API Gateway / Load Balancer                │
+│                                                             │
+└───────────────────────────┬────────────────────────────────┘
+                            │                                   
+                ┌───────────▼───────────┐                        
+                │                       │                        
+        ┌───────▼───────┐   ┌───────────▼───────────┐            
+        │  Web Server  │   │     Queue Worker      │            
+        │  (Nginx)     │   │     (Horizon)         │            
+        └───────┬───────┘   └───────────┬───────────┘            
+                │                       │                        
+        ┌───────▼───────────────────────▼───────┐                
+        │                                       │                
+        │          Laravel Application          │                
+        │                                       │                
+        └───────┬───────────────────────┬───────┘                
+                │                       │                        
+        ┌───────▼───────┐   ┌───────────▼───────────┐            
+        │  Database    │   │      Cache &          │            
+        │  (MySQL)     │   │      Session          │            
+        │              │   │      (Redis)          │            
+        └──────────────┘   └───────────────────────┘            
+```
+
+### 🔧 Technical Stack
+
+- **Backend**: Laravel 10.x (PHP 8.1+)
+- **Frontend**: Vue.js 3, Inertia.js, Tailwind CSS
+- **Database**: MySQL 8.0+ / MariaDB 10.6+
+- **Cache & Queues**: Redis
+- **Search**: Laravel Scout with MeiliSearch
+- **Storage**: Local / S3 Compatible Storage
+- **Containerization**: Docker
+- **CI/CD**: GitHub Actions
+- **Testing**: PHPUnit, Pest
+
+## 🎯 Core Features
+
+### 🔍 Supplier Management
+- Multi-step supplier onboarding
+- Document verification workflow
+- KYC and compliance checks
+- Performance analytics and scoring
+
+### 📑 Document Management
+- Automated document processing
+- Version control and history
+- Digital signatures
+- Expiration tracking
+
+### 📊 Analytics & Reporting
+- Real-time dashboards
+- Custom report builder
+- Export to multiple formats
+- Scheduled reports
+
+### 🔐 Security & Compliance
+- Role-based access control
+- Audit logging
+- Data encryption at rest/transit
+- GDPR compliance tools
 
 ### Supplier Dashboard
 - User authentication and registration
