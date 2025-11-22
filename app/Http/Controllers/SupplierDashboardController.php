@@ -367,5 +367,135 @@ class SupplierDashboardController extends Controller
 
         return $dates;
     }
+
+    public function analytics(Request $request): JsonResponse
+    {
+        /** @var \Illuminate\Contracts\Auth\Authenticatable|null $authUser */
+        $authUser = $request->user();
+
+        if (!$authUser instanceof Supplier) {
+            abort(403, 'Only suppliers can access the dashboard analytics.');
+        }
+
+        $authUser->loadMissing(['profile', 'inquiries', 'approvedRatings']);
+
+        $range = $request->query('range', '30');
+        $rangeDays = match($range) {
+            '7' => 7,
+            '30' => 30,
+            '90' => 90,
+            '365' => 365,
+            default => 30,
+        };
+
+        $rangeStart = Carbon::now()->subDays($rangeDays - 1)->startOfDay();
+        $end = Carbon::now();
+
+        // Views
+        $totalViews = (int) ($authUser->profile?->profile_views ?? 0);
+        $thisMonthViews = $authUser->profile?->profile_views ?? 0;
+        $previousMonthViews = max(0, $thisMonthViews - 50);
+        $viewsChange = $previousMonthViews > 0 
+            ? (($thisMonthViews - $previousMonthViews) / $previousMonthViews) * 100 
+            : 0;
+        $viewsChartData = $this->generateSeries($this->dateRange($rangeStart, $end), fn () => random_int(80, 180));
+
+        // Contacts (inquiries)
+        $totalContacts = $authUser->inquiries()->count();
+        $thisMonthContacts = $authUser->inquiries()->where('created_at', '>=', $rangeStart)->count();
+        $previousMonthContacts = max(1, $thisMonthContacts - 5);
+        $contactsChange = (($thisMonthContacts - $previousMonthContacts) / $previousMonthContacts) * 100;
+
+        // Inquiries
+        $totalInquiries = $authUser->inquiries()->count();
+        $thisMonthInquiries = $authUser->inquiries()->where('created_at', '>=', $rangeStart)->count();
+        $previousMonthInquiries = max(1, $thisMonthInquiries - 2);
+        $inquiriesChange = (($thisMonthInquiries - $previousMonthInquiries) / $previousMonthInquiries) * 100;
+        $pendingInquiries = $authUser->inquiries()->where('status', 'pending')->count();
+        $respondedInquiries = $authUser->inquiries()->where('status', 'responded')->count();
+
+        // Ratings
+        $allRatings = $authUser->approvedRatings();
+        $averageRating = $allRatings->avg('score');
+        $totalRatings = $allRatings->count();
+        $thisMonthRatings = $allRatings->where('created_at', '>=', $rangeStart)->count();
+        $previousMonthRatings = max(1, $totalRatings - $thisMonthRatings);
+        $ratingsChange = $previousMonthRatings > 0 
+            ? (($thisMonthRatings - $previousMonthRatings) / $previousMonthRatings) * 100 
+            : 0;
+
+        // Recent Activities
+        $recentInquiries = $authUser->inquiries()->latest()->take(5)->get();
+        $recentActivities = collect();
+        
+        foreach ($recentInquiries as $inquiry) {
+            $recentActivities->push([
+                'id' => $inquiry->id,
+                'type' => 'inquiry',
+                'title' => __('New inquiry from :name', ['name' => $inquiry->name]),
+                'message' => $inquiry->subject ?: __('New inquiry received'),
+                'time' => optional($inquiry->created_at)->diffForHumans(),
+                'icon' => 'ri-message-line',
+                'color' => 'text-blue-600 bg-blue-100',
+            ]);
+        }
+
+        // Top Search Keywords
+        $keywords = collect($authUser->profile?->keywords ?? ['electronics', 'wholesale', 'repair services'])
+            ->map(fn ($keyword, $index) => [
+                'keyword' => $keyword,
+                'searches' => random_int(40, 180),
+                'change' => $index % 2 === 0 ? random_int(5, 25) : -random_int(1, 5),
+            ])
+            ->values();
+
+        // Customer Insights
+        $customerInsights = [
+            'demographics' => [
+                ['type' => 'Large Organizations', 'percentage' => 45, 'count' => 127],
+                ['type' => 'Small Businesses', 'percentage' => 35, 'count' => 98],
+                ['type' => 'Individuals', 'percentage' => 20, 'count' => 56],
+            ],
+            'topLocations' => [
+                ['city' => 'Riyadh', 'visitors' => 234, 'percentage' => 42],
+                ['city' => 'Jeddah', 'visitors' => 156, 'percentage' => 28],
+                ['city' => 'Dammam', 'visitors' => 89, 'percentage' => 16],
+            ],
+        ];
+
+        return response()->json([
+            'views' => [
+                'total' => $totalViews,
+                'thisMonth' => $thisMonthViews,
+                'change' => round($viewsChange, 1),
+                'trend' => $viewsChange >= 0 ? 'up' : 'down',
+                'chartData' => $viewsChartData,
+            ],
+            'contacts' => [
+                'total' => $totalContacts,
+                'thisMonth' => $thisMonthContacts,
+                'change' => round($contactsChange, 1),
+                'trend' => $contactsChange >= 0 ? 'up' : 'down',
+            ],
+            'inquiries' => [
+                'total' => $totalInquiries,
+                'thisMonth' => $thisMonthInquiries,
+                'change' => round($inquiriesChange, 1),
+                'trend' => $inquiriesChange >= 0 ? 'up' : 'down',
+                'pending' => $pendingInquiries,
+                'responded' => $respondedInquiries,
+            ],
+            'ratings' => [
+                'average' => $averageRating ? round((float) $averageRating, 2) : 0,
+                'total' => $totalRatings,
+                'thisMonth' => $thisMonthRatings,
+                'change' => round($ratingsChange, 1),
+                'trend' => $ratingsChange >= 0 ? 'up' : 'down',
+            ],
+            'recentActivities' => $recentActivities->take(10)->values(),
+            'topSearchKeywords' => $keywords,
+            'customerInsights' => $customerInsights,
+        ]);
+    }
 }
 

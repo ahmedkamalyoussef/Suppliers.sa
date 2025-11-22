@@ -11,6 +11,94 @@ use Illuminate\Support\Facades\Validator;
 class SupplierRatingController extends Controller
 {
     /**
+     * Get ratings received by the authenticated supplier
+     */
+    public function index(Request $request)
+    {
+        $user = $request->user();
+        if (!($user instanceof Supplier)) {
+            return response()->json(['message' => 'Only suppliers can view ratings'], 403);
+        }
+
+        $scope = $request->query('scope', 'received'); // 'received' or 'given'
+        $page = (int) $request->query('page', 1);
+        $perPage = (int) $request->query('per_page', 15);
+        $status = $request->query('status', 'approved');
+
+        $query = $scope === 'given' 
+            ? $user->ratingsGiven()
+            : $user->ratingsReceived();
+
+        if ($status !== 'all') {
+            if ($status === 'approved') {
+                $query->where('is_approved', true)->where('status', 'approved');
+            } elseif ($status === 'pending_review') {
+                $query->where('is_approved', false)->where('status', 'pending_review');
+            } elseif ($status === 'rejected') {
+                $query->where('status', 'rejected');
+            }
+        }
+
+        $query->with(['rater.profile', 'rated.profile']);
+
+        $paginator = $query->latest()->paginate($perPage, ['*'], 'page', $page);
+
+        $ratings = $paginator->getCollection()->map(function (SupplierRating $rating) {
+            $rater = $rating->rater;
+            $raterProfile = $rater?->profile;
+            
+            return [
+                'id' => $rating->id,
+                'ratedBy' => $rater ? [
+                    'id' => $rater->id,
+                    'name' => $rater->name,
+                    'businessName' => $raterProfile?->business_name ?? $rater->name,
+                    'avatar' => $this->mediaUrl($rater->profile_image),
+                ] : [
+                    'id' => null,
+                    'name' => $rating->reviewer_name ?? 'Anonymous',
+                    'businessName' => null,
+                    'avatar' => null,
+                ],
+                'score' => (int) $rating->score,
+                'comment' => $rating->comment,
+                'createdAt' => optional($rating->created_at)->toIso8601String(),
+                'status' => $rating->status,
+                'response' => null, // TODO: Add response support if needed
+            ];
+        });
+
+        // Calculate summary
+        $allRatings = $user->ratingsReceived()->where('is_approved', true)->get();
+        $average = $allRatings->avg('score');
+        $total = $allRatings->count();
+        $distribution = $allRatings->groupBy('score')->map->count()->toArray();
+
+        return response()->json([
+            'data' => $ratings,
+            'meta' => [
+                'current_page' => $paginator->currentPage(),
+                'per_page' => $paginator->perPage(),
+                'total' => $paginator->total(),
+                'last_page' => $paginator->lastPage(),
+                'from' => $paginator->firstItem(),
+                'to' => $paginator->lastItem(),
+            ],
+            'summary' => [
+                'average' => $average ? round((float) $average, 2) : 0,
+                'total' => $total,
+                'distribution' => [
+                    '5' => $distribution[5] ?? 0,
+                    '4' => $distribution[4] ?? 0,
+                    '3' => $distribution[3] ?? 0,
+                    '2' => $distribution[2] ?? 0,
+                    '1' => $distribution[1] ?? 0,
+                ],
+            ],
+        ]);
+    }
+
+    /**
      * Store a newly created resource in storage.
      * Supplier can rate another supplier 1..5
      */
@@ -83,5 +171,18 @@ class SupplierRatingController extends Controller
         }
 
         return response()->json(['message' => 'Unauthorized'], 403);
+    }
+    
+    private function mediaUrl(?string $path): ?string
+    {
+        if (!$path) {
+            return null;
+        }
+
+        if (\Illuminate\Support\Str::startsWith($path, ['http://', 'https://'])) {
+            return $path;
+        }
+
+        return url($path);
     }
 }

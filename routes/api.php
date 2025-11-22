@@ -20,6 +20,16 @@ use App\Http\Controllers\BranchController;
 use App\Http\Controllers\PublicBusinessController;
 use App\Http\Controllers\PublicBusinessInquiryController;
 use App\Http\Controllers\PublicBusinessReviewController;
+use App\Http\Controllers\UserController;
+use App\Http\Controllers\BusinessController;
+use App\Http\Controllers\SearchController;
+use App\Http\Controllers\PaymentController;
+use App\Http\Controllers\ReviewController;
+use App\Http\Controllers\MapController;
+use App\Http\Controllers\SettingsController;
+use App\Http\Controllers\ReportController;
+use App\Http\Controllers\NotificationController;
+use App\Http\Controllers\ExportController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -49,6 +59,7 @@ Route::prefix('auth')->group(function () {
 Route::prefix('public')->group(function () {
     Route::get('/businesses', [PublicBusinessController::class, 'index']);
     Route::get('/businesses/{slug}', [PublicBusinessController::class, 'show']);
+    Route::get('/businesses/{slug}/reviews', [PublicBusinessReviewController::class, 'index']);
     Route::post('/businesses/{slug}/reviews', [PublicBusinessReviewController::class, 'store']);
     Route::post('/businesses/{slug}/inquiries', [PublicBusinessInquiryController::class, 'store']);
     Route::post('/reports', [PublicContentReportController::class, 'store']);
@@ -81,6 +92,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::prefix('admin')->group(function () {
         Route::get('/dashboard', [AdminDashboardController::class, 'overview']);
         Route::get('/dashboard/analytics', [AdminDashboardController::class, 'analytics']);
+        Route::get('/profile', [AdminController::class, 'getProfile']);
         Route::put('/profile', [AdminController::class, 'updateProfile']);
         Route::post('/profile/image', [AdminController::class, 'updateProfileImage']);
         Route::get('/suppliers', [AdminSupplierController::class, 'index']);
@@ -120,9 +132,13 @@ Route::middleware('auth:sanctum')->group(function () {
     // Supplier Profile
     Route::prefix('supplier')->group(function () {
         Route::get('/dashboard', [SupplierDashboardController::class, 'overview']);
+        Route::get('/dashboard/analytics', [SupplierDashboardController::class, 'analytics']);
+        Route::get('/profile', [SupplierAuthController::class, 'getProfile']);
         Route::put('/profile', [SupplierAuthController::class, 'updateProfile']);
+        Route::patch('/profile', [SupplierAuthController::class, 'updateProfilePartial']);
         Route::post('/profile/image', [SupplierAuthController::class, 'updateProfileImage']);
         // Ratings
+        Route::get('/ratings', [SupplierRatingController::class, 'index']);
         Route::post('/ratings', [SupplierRatingController::class, 'store']);
         // Compliance Documents
         Route::get('/documents', [SupplierDocumentController::class, 'index']);
@@ -146,10 +162,172 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/', [BranchController::class, 'store']);
         Route::get('/{branch}', [BranchController::class, 'show']);
         Route::put('/{branch}', [BranchController::class, 'update']);
+        Route::patch('/{branch}', [BranchController::class, 'updatePartial']);
         Route::delete('/{branch}', [BranchController::class, 'destroy']);
         Route::post('/{branch}/set-main', [BranchController::class, 'setMainBranch']);
     });
 
     // Legacy ratings approval route (kept for compatibility)
     Route::post('/ratings/{rating}/approve', [AdminRatingController::class, 'approve']);
+
+    /*
+    ||--------------------------------------------------------------------------
+    || User Management Routes
+    ||--------------------------------------------------------------------------
+    */
+    Route::prefix('users')->group(function () {
+        Route::post('/register', [UserController::class, 'register']);
+        Route::get('/', [UserController::class, 'index']);
+        Route::get('/{user}', [UserController::class, 'show']);
+        Route::put('/{user}', [UserController::class, 'update']);
+        Route::patch('/{user}', [UserController::class, 'updatePartial']);
+        Route::delete('/{user}', [UserController::class, 'destroy']);
+        Route::get('/profile', [UserController::class, 'profile']);
+        Route::put('/profile', [UserController::class, 'updateProfile']);
+        Route::get('/limits', [UserController::class, 'limits']);
+        Route::post('/check-business-limit', [UserController::class, 'checkBusinessLimit']);
+    });
+
+    /*
+    ||--------------------------------------------------------------------------
+    || Business Management Routes
+    ||--------------------------------------------------------------------------
+    */
+    Route::prefix('businesses')->group(function () {
+        Route::get('/', [BusinessController::class, 'index']);
+        Route::post('/', [BusinessController::class, 'store']);
+        Route::get('/{business}', [BusinessController::class, 'show']);
+        Route::put('/{business}', [BusinessController::class, 'update']);
+        Route::patch('/{business}', [BusinessController::class, 'updatePartial']);
+        Route::delete('/{business}', [BusinessController::class, 'destroy']);
+        Route::post('/{business}/images', [BusinessController::class, 'uploadImage']);
+        Route::delete('/{business}/images/{image}', [BusinessController::class, 'deleteImage']);
+        Route::get('/{business}/reviews', [BusinessController::class, 'businessReviews']);
+        Route::put('/{business}/location', [BusinessController::class, 'updateLocation']);
+    });
+
+    /*
+    ||--------------------------------------------------------------------------
+    || Search and Filtering Routes
+    ||--------------------------------------------------------------------------
+    */
+    Route::prefix('search')->group(function () {
+        Route::get('/businesses', [SearchController::class, 'businesses']);
+        Route::get('/suggestions', [SearchController::class, 'suggestions']);
+        Route::post('/advanced', [SearchController::class, 'advanced']);
+        Route::post('/image-search', [SearchController::class, 'imageSearch']);
+    });
+
+    /*
+    ||--------------------------------------------------------------------------
+    || Payment Routes
+    ||--------------------------------------------------------------------------
+    */
+    Route::prefix('payments')->group(function () {
+        Route::post('/create', [PaymentController::class, 'create']);
+        Route::get('/{transaction_id}/query', [PaymentController::class, 'query']);
+        Route::post('/{transaction_id}/refund', [PaymentController::class, 'refund']);
+        Route::post('/callback', [PaymentController::class, 'callback']);
+        Route::get('/methods', [PaymentController::class, 'methods']);
+    });
+
+    /*
+    ||--------------------------------------------------------------------------
+    || Reviews and Ratings Routes
+    ||--------------------------------------------------------------------------
+    */
+    Route::prefix('reviews')->group(function () {
+        Route::post('/', [ReviewController::class, 'store']);
+        Route::get('/', [ReviewController::class, 'index']);
+        Route::get('/{review}', [ReviewController::class, 'show']);
+        Route::put('/{review}', [ReviewController::class, 'update']);
+        Route::delete('/{review}', [ReviewController::class, 'destroy']);
+        Route::post('/{review}/helpful', [ReviewController::class, 'markHelpful']);
+        Route::post('/{review}/report', [ReviewController::class, 'report']);
+        Route::post('/{review}/approve', [ReviewController::class, 'approve']);
+        Route::post('/{review}/reject', [ReviewController::class, 'reject']);
+        Route::get('/pending', [ReviewController::class, 'pending']);
+        Route::get('/statistics', [ReviewController::class, 'statistics']);
+    });
+
+    /*
+    ||--------------------------------------------------------------------------
+    || Maps and Location Routes
+    ||--------------------------------------------------------------------------
+    */
+    Route::prefix('maps')->group(function () {
+        Route::get('/businesses', [MapController::class, 'businesses']);
+        Route::post('/directions', [MapController::class, 'directions']);
+        Route::post('/geocode', [MapController::class, 'geocode']);
+        Route::post('/reverse-geocode', [MapController::class, 'reverseGeocode']);
+        Route::get('/nearby', [MapController::class, 'nearby']);
+    });
+
+    /*
+    ||--------------------------------------------------------------------------
+    || System Settings Routes
+    ||--------------------------------------------------------------------------
+    */
+    Route::prefix('settings')->group(function () {
+        Route::get('/general', [SettingsController::class, 'general']);
+        Route::put('/general', [SettingsController::class, 'updateGeneral']);
+        Route::get('/plans', [SettingsController::class, 'plans']);
+        Route::put('/plans', [SettingsController::class, 'updatePlans']);
+        Route::get('/payment', [SettingsController::class, 'payment']);
+        Route::put('/payment', [SettingsController::class, 'updatePayment']);
+        Route::get('/notifications', [SettingsController::class, 'notifications']);
+        Route::put('/notifications', [SettingsController::class, 'updateNotifications']);
+        Route::get('/security', [SettingsController::class, 'security']);
+        Route::put('/security', [SettingsController::class, 'updateSecurity']);
+        Route::get('/maintenance', [SettingsController::class, 'maintenance']);
+        Route::put('/maintenance', [SettingsController::class, 'updateMaintenance']);
+        Route::post('/cache/clear', [SettingsController::class, 'clearCache']);
+        Route::get('/system/status', [SettingsController::class, 'systemStatus']);
+    });
+
+    /*
+    ||--------------------------------------------------------------------------
+    || Reports and Analytics Routes
+    ||--------------------------------------------------------------------------
+    */
+    Route::prefix('reports')->group(function () {
+        Route::get('/dashboard', [ReportController::class, 'dashboard']);
+        Route::get('/users', [ReportController::class, 'users']);
+        Route::get('/businesses', [ReportController::class, 'businesses']);
+        Route::get('/reviews', [ReportController::class, 'reviews']);
+        Route::get('/revenue', [ReportController::class, 'revenue']);
+        Route::post('/export', [ReportController::class, 'export']);
+    });
+
+    /*
+    ||--------------------------------------------------------------------------
+    || Notifications Routes
+    ||--------------------------------------------------------------------------
+    */
+    Route::prefix('notifications')->group(function () {
+        Route::get('/', [NotificationController::class, 'index']);
+        Route::post('/{id}/read', [NotificationController::class, 'markAsRead']);
+        Route::post('/read-all', [NotificationController::class, 'markAllAsRead']);
+        Route::delete('/{id}', [NotificationController::class, 'delete']);
+        Route::get('/settings', [NotificationController::class, 'settings']);
+        Route::put('/settings', [NotificationController::class, 'updateSettings']);
+        Route::post('/send', [NotificationController::class, 'sendNotification']);
+        Route::post('/send-bulk', [NotificationController::class, 'sendBulk']);
+        Route::get('/statistics', [NotificationController::class, 'statistics']);
+        Route::get('/templates', [NotificationController::class, 'templates']);
+    });
+
+    /*
+    ||--------------------------------------------------------------------------
+    || Data Export Routes
+    ||--------------------------------------------------------------------------
+    */
+    Route::prefix('exports')->group(function () {
+        Route::post('/users', [ExportController::class, 'users']);
+        Route::post('/businesses', [ExportController::class, 'businesses']);
+        Route::post('/reviews', [ExportController::class, 'reviews']);
+        Route::post('/analytics', [ExportController::class, 'analytics']);
+        Route::get('/history', [ExportController::class, 'history']);
+        Route::get('/download/{filename}', [ExportController::class, 'download']);
+    });
 });

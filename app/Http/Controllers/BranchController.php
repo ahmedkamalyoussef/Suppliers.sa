@@ -71,6 +71,14 @@ class BranchController extends Controller
      */
     public function update(Request $request, Branch $branch)
     {
+        return $this->updatePartial($request, $branch);
+    }
+    
+    /**
+     * Partial update branch (PATCH)
+     */
+    public function updatePartial(Request $request, Branch $branch)
+    {
         if ($branch->supplier_id !== $request->user()->id) {
             return response()->json(['message' => 'Unauthorized'], 403);
         }

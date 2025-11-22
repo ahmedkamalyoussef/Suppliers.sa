@@ -10,6 +10,65 @@ use Illuminate\Support\Facades\Validator;
 
 class PublicBusinessReviewController extends Controller
 {
+    public function index(Request $request, string $slug)
+    {
+        $supplier = Supplier::whereHas('profile', fn (Builder $query) => $query->where('slug', $slug))->firstOrFail();
+
+        $page = (int) $request->query('page', 1);
+        $perPage = (int) $request->query('per_page', 10);
+        $sort = $request->query('sort', 'newest');
+
+        $query = $supplier->approvedRatings();
+
+        $query = match($sort) {
+            'oldest' => $query->oldest(),
+            'highest' => $query->orderByDesc('score'),
+            'lowest' => $query->orderBy('score'),
+            default => $query->latest(),
+        };
+
+        $paginator = $query->paginate($perPage, ['*'], 'page', $page);
+
+        $ratings = $paginator->getCollection()->map(function (SupplierRating $rating) {
+            return [
+                'id' => $rating->id,
+                'customerName' => $rating->reviewer_name ?? ($rating->rater?->name ?? 'Anonymous'),
+                'rating' => (int) $rating->score,
+                'comment' => $rating->comment,
+                'date' => optional($rating->created_at)->toIso8601String(),
+                'verified' => (bool) $rating->is_approved,
+                'response' => null, // TODO: Add response support if needed
+            ];
+        });
+
+        // Calculate summary
+        $allRatings = $supplier->approvedRatings()->get();
+        $average = $allRatings->avg('score');
+        $total = $allRatings->count();
+        $distribution = $allRatings->groupBy('score')->map->count()->toArray();
+
+        return response()->json([
+            'data' => $ratings,
+            'meta' => [
+                'current_page' => $paginator->currentPage(),
+                'per_page' => $paginator->perPage(),
+                'total' => $paginator->total(),
+                'last_page' => $paginator->lastPage(),
+            ],
+            'summary' => [
+                'average' => $average ? round((float) $average, 2) : 0,
+                'total' => $total,
+                'distribution' => [
+                    '5' => $distribution[5] ?? 0,
+                    '4' => $distribution[4] ?? 0,
+                    '3' => $distribution[3] ?? 0,
+                    '2' => $distribution[2] ?? 0,
+                    '1' => $distribution[1] ?? 0,
+                ],
+            ],
+        ]);
+    }
+
     public function store(Request $request, string $slug)
     {
         $supplier = Supplier::whereHas('profile', fn (Builder $query) => $query->where('slug', $slug))->firstOrFail();

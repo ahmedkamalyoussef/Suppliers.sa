@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Auth;
 use App\Http\Controllers\Controller;
 use App\Models\Supplier;
 use App\Models\SupplierProfile;
+use App\Models\SupplierDocument;
 use App\Models\Otp;
 use App\Notifications\OtpNotification;
 use Illuminate\Http\Request;
@@ -68,8 +69,6 @@ class SupplierAuthController extends Controller
         $profile->slug = $this->generateUniqueSupplierSlug($profile->business_name, $profile->id);
         $profile->save();
 
-        $otp = Otp::generateForSupplier($supplier->id, $supplier->email);
-        $supplier->notify(new OtpNotification($otp->otp, 10));
 
         $supplier->load('profile');
 
@@ -78,9 +77,6 @@ class SupplierAuthController extends Controller
             'supplier' => $this->transformSupplier($supplier, false),
         ];
 
-        if (app()->environment('local', 'testing')) {
-            $response['debugOtp'] = $otp->otp;
-        }
 
         return response()->json($response, 201);
     }
@@ -176,16 +172,38 @@ class SupplierAuthController extends Controller
 
     public function updateProfile(Request $request)
     {
+        return $this->updateProfilePartial($request);
+    }
+    
+    public function updateProfilePartial(Request $request)
+    {
         $supplier = $request->user();
 
         if (!($supplier instanceof Supplier)) {
             return response()->json(['message' => 'Unauthorized'], 403);
         }
 
+        // Normalize array-like inputs coming from form-data or raw values
+        foreach (['whoDoYouServe', 'targetCustomers'] as $arrKey) {
+            if ($request->has($arrKey)) {
+                $val = $request->input($arrKey);
+                // If sent as JSON string, decode
+                if (is_string($val)) {
+                    $decoded = json_decode($val, true);
+                    if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
+                        $request->merge([$arrKey => $decoded]);
+                    } else {
+                        // Wrap plain string into array
+                        $request->merge([$arrKey => [$val]]);
+                    }
+                }
+            }
+        }
+
         $validator = Validator::make($request->all(), [
             'name' => ['sometimes', 'string', 'max:255'],
             'businessName' => ['sometimes', 'string', 'max:255'],
-            'businessType' => ['sometimes', 'string', 'max:100'],
+            'businessType' => ['sometimes', 'string', Rule::in(['supplier','store','office','individual'])],
             'category' => ['sometimes', 'string', 'max:255'],
             'categories' => ['sometimes', 'array'],
             'categories.*' => ['string', 'max:255'],
@@ -193,11 +211,22 @@ class SupplierAuthController extends Controller
             'services.*' => ['string', 'max:255'],
             'productKeywords' => ['sometimes', 'array'],
             'productKeywords.*' => ['string', 'max:255'],
+            // Allow legacy array targetCustomers or new array whoDoYouServe
             'targetCustomers' => ['sometimes', 'array'],
             'targetCustomers.*' => ['string', 'max:255'],
-            'serviceDistance' => ['sometimes', 'numeric', 'min:0'],
+            'whoDoYouServe' => ['sometimes', 'array'],
+            'whoDoYouServe.*' => ['string', 'max:255'],
+            'serviceDistance' => ['sometimes', 'string', 'max:255'],
+            // Additional phones as array of objects
             'additionalPhones' => ['sometimes', 'array'],
+            'additionalPhones.*.number' => ['required_with:additionalPhones', 'string', 'max:20'],
+            'additionalPhones.*.name' => ['nullable', 'string', 'max:255'],
+            'additionalPhones.*.type' => ['nullable', 'string', 'max:50'],
+            // Working hours flexible object keyed by weekdays
             'workingHours' => ['sometimes', 'array'],
+            'workingHours.*.closed' => ['sometimes', 'boolean'],
+            'workingHours.*.open' => ['sometimes', 'string'],
+            'workingHours.*.close' => ['sometimes', 'string'],
             'website' => ['sometimes', 'nullable', 'string', 'max:255'],
             'address' => ['sometimes', 'nullable', 'string'],
             'description' => ['sometimes', 'nullable', 'string'],
@@ -213,6 +242,20 @@ class SupplierAuthController extends Controller
             'location.lat' => ['sometimes', 'numeric'],
             'location.lng' => ['sometimes', 'numeric'],
             'hasBranches' => ['sometimes', 'boolean'],
+            // Inline branches creation
+            'branches' => ['sometimes', 'array'],
+            'branches.*.name' => ['required_with:branches', 'string', 'max:255'],
+            'branches.*.phone' => ['required_with:branches', 'string', 'max:20'],
+            'branches.*.email' => ['nullable', 'email', 'max:255'],
+            'branches.*.address' => ['required_with:branches', 'string', 'max:500'],
+            'branches.*.manager' => ['required_with:branches', 'string', 'max:255'],
+            'branches.*.location.lat' => ['sometimes', 'numeric'],
+            'branches.*.location.lng' => ['sometimes', 'numeric'],
+            'branches.*.workingHours' => ['sometimes', 'array'],
+            'branches.*.specialServices' => ['sometimes', 'array'],
+            'branches.*.isMainBranch' => ['sometimes', 'boolean'],
+            // Optional supplier document upload (metadata all optional)
+            'document' => ['sometimes', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:10240'],
         ]);
 
         if ($validator->fails()) {
@@ -265,6 +308,9 @@ class SupplierAuthController extends Controller
 
         if ($request->has('targetCustomers')) {
             $profileData['target_market'] = $request->input('targetCustomers', []);
+        }
+        if ($request->has('whoDoYouServe')) {
+            $profileData['target_market'] = $request->input('whoDoYouServe', []);
         }
 
         if ($request->has('serviceDistance')) {
@@ -319,12 +365,121 @@ class SupplierAuthController extends Controller
             $profile->update($profileData);
         }
 
+        // Create branches inline if provided
+        if ($request->has('branches')) {
+            $branches = $request->input('branches', []);
+            foreach ($branches as $b) {
+                $payload = [
+                    'name' => $b['name'] ?? null,
+                    'phone' => $b['phone'] ?? null,
+                    'email' => $b['email'] ?? null,
+                    'address' => $b['address'] ?? null,
+                    'manager_name' => $b['manager'] ?? null,
+                    'latitude' => data_get($b, 'location.lat'),
+                    'longitude' => data_get($b, 'location.lng'),
+                    'working_hours' => $b['workingHours'] ?? $this->defaultBranchHours(),
+                    'special_services' => $b['specialServices'] ?? [],
+                    'is_main_branch' => (bool) ($b['isMainBranch'] ?? false),
+                    'status' => 'active',
+                ];
+
+                $supplier->branches()->create($payload);
+            }
+        }
+
+        // Create or replace a supplier document if provided
+        if ($request->hasFile('document')) {
+            $validatedDocType = $request->input('documentType', 'general');
+
+            // If a document with same type exists, delete and replace
+            $existingDocument = $supplier->documents()
+                ->where('document_type', $validatedDocType)
+                ->first();
+
+            if ($existingDocument) {
+                // Delete old file if exists
+                $oldPath = $existingDocument->file_path;
+                if ($oldPath && File::exists(public_path($oldPath))) {
+                    File::delete(public_path($oldPath));
+                }
+                $existingDocument->delete();
+            }
+
+            // Ensure destination dir
+            $destDir = public_path('uploads/documents');
+            if (!File::exists($destDir)) {
+                File::makeDirectory($destDir, 0755, true);
+            }
+
+            $file = $request->file('document');
+            $filename = Str::uuid().'.'.$file->getClientOriginalExtension();
+            $file->move($destDir, $filename);
+
+            $filePath = 'uploads/documents/'.$filename;
+
+            SupplierDocument::create([
+                'supplier_id' => $supplier->id,
+                'file_path' => $filePath,
+            ]);
+        }
+
         $supplier->load('profile', 'branches');
 
         return response()->json([
             'message' => 'Profile updated successfully',
             'supplier' => $this->transformSupplier($supplier),
         ]);
+    }
+
+    public function getProfile(Request $request)
+    {
+        $supplier = $request->user();
+
+        if (!($supplier instanceof Supplier)) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
+        $supplier->loadMissing(['profile', 'branches', 'approvedRatings']);
+        
+        $profile = $supplier->profile;
+        $ratingAverage = $supplier->approvedRatings()->avg('score');
+        $ratingCount = $supplier->approvedRatings()->count();
+        
+        $ratingDistribution = $supplier->approvedRatings()
+            ->selectRaw('score, COUNT(*) as count')
+            ->groupBy('score')
+            ->pluck('count', 'score')
+            ->toArray();
+
+        $response = [
+            'id' => $supplier->id,
+            'businessName' => $profile?->business_name ?? $supplier->name,
+            'businessType' => $profile?->business_type ?? 'Supplier',
+            'categories' => $profile?->business_categories ?? [],
+            'services' => $profile?->services_offered ?? [],
+            'description' => $profile?->description,
+            'website' => $profile?->website,
+            'address' => $profile?->business_address,
+            'serviceDistance' => $profile?->service_distance,
+            'contactPhone' => $profile?->main_phone ?? $supplier->phone,
+            'contactEmail' => $profile?->contact_email ?? $supplier->email,
+            'profileImage' => $this->mediaUrl($supplier->profile_image),
+            'status' => $supplier->status,
+            'verificationStatus' => $supplier->status === 'active' ? 'verified' : ($supplier->status === 'pending' ? 'pending_verification' : 'suspended'),
+            'plan' => $supplier->plan ?? 'Basic',
+            'rating' => [
+                'average' => $ratingAverage ? round((float) $ratingAverage, 2) : 0,
+                'total' => $ratingCount,
+            ],
+            'workingHours' => $profile?->working_hours ?? $this->defaultWorkingHours(),
+            'productKeywords' => $profile?->keywords ?? [],
+            'targetCustomers' => $profile?->target_market ?? [],
+            'additionalPhones' => $profile?->additional_phones ?? [],
+            'createdAt' => optional($supplier->created_at)->toIso8601String(),
+            'updatedAt' => optional($supplier->updated_at)->toIso8601String(),
+        ];
+
+        return response()->json($response);
     }
 
     public function updateProfileImage(Request $request)
@@ -350,6 +505,35 @@ class SupplierAuthController extends Controller
         $supplier->load('profile');
 
         return response()->json(['message'=>'Profile image updated successfully','supplier'=>$this->transformSupplier($supplier, false)]);
+    }
+    
+    protected function mediaUrl(?string $path): ?string
+    {
+        if (!$path) {
+            return null;
+        }
+
+        if (Str::startsWith($path, ['http://', 'https://'])) {
+            return $path;
+        }
+
+        return url($path);
+    }
+    
+    private function defaultWorkingHours(): array
+    {
+        $days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+        $default = [];
+
+        foreach ($days as $day) {
+            $default[$day] = [
+                'open' => $day === 'sunday' ? '10:00' : '08:00',
+                'close' => $day === 'sunday' ? '16:00' : '18:00',
+                'closed' => $day === 'sunday',
+            ];
+        }
+
+        return $default;
     }
 
     private function generateUniqueSupplierSlug(string $name, ?int $profileId = null): string

@@ -236,6 +236,47 @@ class AdminController extends Controller
     }
 
     /**
+     * Get admin's own profile
+     */
+    public function getProfile(Request $request)
+    {
+        $admin = $request->user();
+
+        if (!($admin instanceof Admin)) {
+            return response()->json(['message' => 'Unauthorized. Admin access required.'], 403);
+        }
+
+        $admin->loadMissing('permissions');
+        
+        $transformed = $this->transformAdmin($admin);
+        
+        // Add flat permissions structure as per API spec
+        $permissions = $admin->permissions ? [
+            'user_management_view' => (bool) $admin->permissions->user_management_view,
+            'user_management_edit' => (bool) $admin->permissions->user_management_edit,
+            'user_management_delete' => (bool) $admin->permissions->user_management_delete,
+            'user_management_full' => (bool) $admin->permissions->user_management_full,
+            'content_management_view' => (bool) $admin->permissions->content_management_view,
+            'content_management_supervise' => (bool) $admin->permissions->content_management_supervise,
+            'content_management_delete' => (bool) $admin->permissions->content_management_delete,
+            'analytics_view' => (bool) $admin->permissions->analytics_view,
+            'analytics_export' => (bool) $admin->permissions->analytics_export,
+            'reports_view' => (bool) $admin->permissions->reports_view,
+            'reports_create' => (bool) $admin->permissions->reports_create,
+            'system_manage' => (bool) $admin->permissions->system_manage,
+            'system_settings' => (bool) $admin->permissions->system_settings,
+            'system_backups' => (bool) $admin->permissions->system_backups,
+            'support_manage' => (bool) $admin->permissions->support_manage,
+        ] : null;
+        
+        $transformed['permissions'] = $permissions;
+        $transformed['job_role'] = $admin->job_role;
+        $transformed['lastLogin'] = optional($admin->last_login_at ?? $admin->created_at)->toIso8601String();
+        
+        return response()->json($transformed);
+    }
+
+    /**
      * Update admin's own profile (name, email, department, job_role only)
      * Admin can update their own profile without super admin permission
      */
@@ -426,6 +467,19 @@ class AdminController extends Controller
             'system_backups' => (bool) data_get($permissions, 'system.backups', false),
             'support_manage' => (bool) data_get($permissions, 'support.manage', false),
         ];
+    }
+    
+    private function mediaUrl(?string $path): ?string
+    {
+        if (!$path) {
+            return null;
+        }
+
+        if (\Illuminate\Support\Str::startsWith($path, ['http://', 'https://'])) {
+            return $path;
+        }
+
+        return url($path);
     }
 }
 

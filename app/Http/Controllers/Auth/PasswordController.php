@@ -70,7 +70,7 @@ class PasswordController extends Controller
     $validator = Validator::make($request->all(), [
         'email' => 'required|email',
         'otp' => 'required|numeric|digits:6',
-        'password' => 'required|string|min:8|confirmed'
+        'password' => 'required|string|min:6|confirmed'
     ]);
 
     if ($validator->fails()) {
@@ -120,7 +120,7 @@ class PasswordController extends Controller
     {
         $validator = Validator::make($request->all(), [
             'current_password' => 'required|string',
-            'password' => 'required|string|min:8|confirmed|different:current_password'
+            'password' => 'required|string|min:6|confirmed|different:current_password'
         ]);
 
         if ($validator->fails()) {

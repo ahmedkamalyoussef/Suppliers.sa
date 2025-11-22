@@ -26,13 +26,50 @@ class PublicBusinessController extends Controller
 
         $data = $paginator->getCollection()->map(fn (Supplier $supplier) => $this->transformSupplierSummary($supplier));
 
+        // Get available filters for response
+        $availableCategories = Supplier::whereHas('profile', function (Builder $q) {
+            $q->whereNotNull('business_categories');
+        })->with('profile')->get()
+            ->pluck('profile.business_categories')
+            ->flatten()
+            ->filter()
+            ->unique()
+            ->values()
+            ->toArray();
+
+        $availableLocations = Supplier::whereHas('profile', function (Builder $q) {
+            $q->whereNotNull('business_address');
+        })->with('profile')->get()
+            ->pluck('profile.business_address')
+            ->filter()
+            ->map(fn ($addr) => explode(',', $addr)[0] ?? $addr)
+            ->unique()
+            ->values()
+            ->toArray();
+
+        $availableBusinessTypes = Supplier::whereHas('profile', function (Builder $q) {
+            $q->whereNotNull('business_type');
+        })->with('profile')->get()
+            ->pluck('profile.business_type')
+            ->filter()
+            ->unique()
+            ->values()
+            ->toArray();
+
         return response()->json([
             'data' => $data,
             'meta' => [
-                'currentPage' => $paginator->currentPage(),
-                'perPage' => $paginator->perPage(),
+                'current_page' => $paginator->currentPage(),
+                'per_page' => $paginator->perPage(),
                 'total' => $paginator->total(),
-                'lastPage' => $paginator->lastPage(),
+                'last_page' => $paginator->lastPage(),
+                'from' => $paginator->firstItem(),
+                'to' => $paginator->lastItem(),
+            ],
+            'filters' => [
+                'categories' => $availableCategories,
+                'locations' => $availableLocations,
+                'businessTypes' => $availableBusinessTypes,
             ],
         ]);
     }
@@ -59,13 +96,17 @@ class PublicBusinessController extends Controller
 
     private function applyFilters(Builder $query, Request $request): Builder
     {
-        if ($search = $request->input('query')) {
+        // Support both 'query' and 'keyword' for search
+        $search = $request->input('keyword') ?: $request->input('query');
+        
+        if ($search) {
             $query->where(function (Builder $builder) use ($search) {
                 $builder->where('suppliers.name', 'like', "%{$search}%")
                     ->orWhereHas('profile', function (Builder $profileQuery) use ($search) {
                         $profileQuery->where('business_name', 'like', "%{$search}%")
                             ->orWhere('business_address', 'like', "%{$search}%")
-                            ->orWhere('description', 'like', "%{$search}%");
+                            ->orWhere('description', 'like', "%{$search}%")
+                            ->orWhereJsonContains('keywords', $search);
                     });
             });
         }
@@ -104,18 +145,29 @@ class PublicBusinessController extends Controller
             });
         }
 
-        if (($rating = $request->input('rating')) !== null) {
-            $rating = (int) $rating;
-            $query->having('rating_average', '>=', $rating);
+        // Support both 'rating' and 'minRating'
+        $minRating = $request->input('minRating') ?: $request->input('rating');
+        if ($minRating !== null) {
+            $minRating = (int) $minRating;
+            $query->having('rating_average', '>=', $minRating);
         }
 
-        if (($distance = $request->input('distance')) !== null) {
-            $distance = (int) $distance;
-            $query->whereHas('profile', function (Builder $profileQuery) use ($distance) {
-                $profileQuery->where(function (Builder $nested) use ($distance) {
+        // Support both 'distance' and 'serviceDistance'
+        $serviceDistance = $request->input('serviceDistance') ?: $request->input('distance');
+        if ($serviceDistance !== null) {
+            $serviceDistance = (int) $serviceDistance;
+            $query->whereHas('profile', function (Builder $profileQuery) use ($serviceDistance) {
+                $profileQuery->where(function (Builder $nested) use ($serviceDistance) {
                     $nested->whereNull('service_distance')
-                        ->orWhere('service_distance', '<=', $distance);
+                        ->orWhere('service_distance', '<=', $serviceDistance);
                 });
+            });
+        }
+
+        // Filter by target customer
+        if ($targetCustomer = $request->input('targetCustomer')) {
+            $query->whereHas('profile', function (Builder $profileQuery) use ($targetCustomer) {
+                $profileQuery->whereJsonContains('target_market', $targetCustomer);
             });
         }
 
@@ -124,12 +176,15 @@ class PublicBusinessController extends Controller
 
     private function applySorting(Builder $query, Request $request): Builder
     {
-        $sort = $request->input('sort', 'rating');
+        $sort = $request->input('sort', 'relevance');
 
         return match ($sort) {
+            'relevance' => $query->orderByDesc('rating_average')->orderByDesc('rating_count'),
+            'rating' => $query->orderByDesc('rating_average')->orderByDesc('rating_count'),
+            'reviews' => $query->orderByDesc('rating_count')->orderByDesc('rating_average'),
+            'newest' => $query->latest('suppliers.created_at'),
             'name' => $query->orderBy('suppliers.name'),
             'distance' => $query->orderByRaw('COALESCE((select service_distance from supplier_profiles where supplier_profiles.supplier_id = suppliers.id), 999999)'),
-            'recent' => $query->latest('suppliers.created_at'),
             default => $query->orderByDesc('rating_average')->orderByDesc('rating_count'),
         };
     }

@@ -105,8 +105,9 @@ abstract class Controller extends BaseController
                 'mainPhone' => $profile->main_phone,
                 'contactEmail' => $profile->contact_email,
                 'targetCustomers' => $profile->target_market ?? [],
+                'whoDoYouServe' => $profile->target_market ?? [],
                 'productKeywords' => $profile->keywords ?? [],
-                'serviceDistance' => $profile->service_distance !== null ? (float) $profile->service_distance : null,
+                'serviceDistance' => $profile->service_distance !== null ? (string) $profile->service_distance : null,
                 'additionalPhones' => $profile->additional_phones ?? [],
                 'workingHours' => $profile->working_hours ?? [],
                 'hasBranches' => (bool) $profile->has_branches,
@@ -228,23 +229,12 @@ abstract class Controller extends BaseController
 
     protected function transformDocument(SupplierDocument $document): array
     {
-        $document->loadMissing('reviewer');
-
         return array_filter([
             'id' => $document->id,
             'businessName' => $document->supplier?->profile?->business_name ?? $document->supplier?->name,
             'ownerName' => $document->supplier?->name,
-            'documentType' => $document->document_type,
-            'crNumber' => $document->reference_number,
-            'referenceNumber' => $document->reference_number,
-            'uploadDate' => optional($document->created_at)->toIso8601String(),
-            'issueDate' => optional($document->issue_date)->toDateString(),
-            'expiryDate' => optional($document->expiry_date)->toDateString(),
-            'status' => $document->status,
-            'notes' => $document->notes,
             'fileUrl' => $this->mediaUrl($document->file_path),
-            'reviewedAt' => optional($document->reviewed_at)->toIso8601String(),
-            'reviewer' => optional($document->reviewer)->name,
+            'uploadDate' => optional($document->created_at)->toIso8601String(),
         ], function ($value) {
             return $value !== null;
         });

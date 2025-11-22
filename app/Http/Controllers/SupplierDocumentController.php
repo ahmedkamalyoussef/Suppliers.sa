@@ -27,24 +27,8 @@ class SupplierDocumentController extends Controller
         $supplier = $this->resolveSupplier($request);
 
         $validated = $request->validate([
-            'documentType' => ['required', 'string', 'max:255'],
-            'referenceNumber' => ['nullable', 'string', 'max:255'],
-            'issueDate' => ['nullable', 'date'],
-            'expiryDate' => ['nullable', 'date', 'after_or_equal:issueDate'],
             'document' => ['required', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:10240'],
-            'notes' => ['nullable', 'string'],
         ]);
-
-        // Check if there's an existing document of the same type for this supplier
-        $existingDocument = $supplier->documents()
-            ->where('document_type', $validated['documentType'])
-            ->first();
-
-        // Delete old document file if exists
-        if ($existingDocument) {
-            $this->deleteFile($existingDocument->file_path);
-            $existingDocument->delete();
-        }
 
         // Store new document in public/uploads/documents
         $destDir = public_path('uploads/documents');
@@ -60,13 +44,7 @@ class SupplierDocumentController extends Controller
 
         $document = SupplierDocument::create([
             'supplier_id' => $supplier->id,
-            'document_type' => $validated['documentType'],
-            'reference_number' => $validated['referenceNumber'] ?? null,
-            'issue_date' => $validated['issueDate'] ?? null,
-            'expiry_date' => $validated['expiryDate'] ?? null,
             'file_path' => $filePath,
-            'status' => 'pending_verification',
-            'notes' => $validated['notes'] ?? null,
         ]);
 
         return response()->json([
@@ -83,9 +61,7 @@ class SupplierDocumentController extends Controller
             abort(404);
         }
 
-        if ($document->status !== 'pending_verification') {
-            return response()->json(['message' => 'Only pending verification documents can be deleted.'], 422);
-        }
+        // With simplified flow, allow deleting any document
 
         $this->deleteFile($document->file_path);
         $document->delete();
@@ -103,9 +79,6 @@ class SupplierDocumentController extends Controller
 
         $validated = $request->validate([
             'document' => ['required', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:10240'],
-            'issueDate' => ['nullable', 'date'],
-            'expiryDate' => ['nullable', 'date', 'after_or_equal:issueDate'],
-            'notes' => ['nullable', 'string'],
         ]);
 
         // Delete old document file
@@ -125,12 +98,6 @@ class SupplierDocumentController extends Controller
 
         $document->forceFill([
             'file_path' => $filePath,
-            'status' => 'pending_verification',
-            'issue_date' => $validated['issueDate'] ?? $document->issue_date,
-            'expiry_date' => $validated['expiryDate'] ?? $document->expiry_date,
-            'notes' => $validated['notes'] ?? $document->notes,
-            'reviewed_by_admin_id' => null,
-            'reviewed_at' => null,
         ])->save();
 
         return response()->json([

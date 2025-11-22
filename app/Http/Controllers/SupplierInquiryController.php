@@ -114,6 +114,7 @@ class SupplierInquiryController extends Controller
 
         $validated = $request->validate([
             'message' => 'required|string',
+            'subject' => 'nullable|string|max:255',
         ]);
 
         $inquiry->forceFill([
@@ -122,6 +123,12 @@ class SupplierInquiryController extends Controller
             'status' => $inquiry->status === 'closed' ? 'closed' : 'responded',
             'is_unread' => false,
         ])->save();
+        
+        // Update subject if provided
+        if (isset($validated['subject'])) {
+            $inquiry->subject = $validated['subject'];
+            $inquiry->save();
+        }
 
         return response()->json([
             'message' => 'Response recorded successfully.',
