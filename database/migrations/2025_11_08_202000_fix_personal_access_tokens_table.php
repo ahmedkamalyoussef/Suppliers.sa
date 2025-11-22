@@ -10,7 +10,7 @@ return new class extends Migration
     {
         // Drop and recreate personal_access_tokens with correct schema
         Schema::dropIfExists('personal_access_tokens');
-        
+
         Schema::create('personal_access_tokens', function (Blueprint $table) {
             $table->id();
             $table->morphs('tokenable');

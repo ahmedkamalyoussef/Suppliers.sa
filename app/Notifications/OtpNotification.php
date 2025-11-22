@@ -11,13 +11,13 @@ class OtpNotification extends Notification
     use Queueable;
 
     public readonly string $otp;
+
     public readonly int $expiresIn;
 
     /**
      * Create a new notification instance.
      *
-     * @param string $otp
-     * @param int $expiresIn Expiration time in minutes
+     * @param  int  $expiresIn  Expiration time in minutes
      */
     public function __construct(string $otp, int $expiresIn = 10)
     {
@@ -40,7 +40,6 @@ class OtpNotification extends Notification
      * Get the mail representation of the notification.
      *
      * @param  mixed  $notifiable
-     * @return \Illuminate\Notifications\Messages\MailMessage
      */
     public function toMail(object $notifiable): MailMessage
     {

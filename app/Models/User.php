@@ -86,13 +86,13 @@ class User extends Authenticatable
     {
         $maxBusinesses = $this->getMaxBusinesses();
         $currentCount = $this->businesses()->count();
-        
+
         return $currentCount < $maxBusinesses;
     }
 
     public function getMaxBusinesses(): int
     {
-        return match($this->plan) {
+        return match ($this->plan) {
             'Basic' => 8,
             'Premium' => 15,
             'Enterprise' => 50,

@@ -23,4 +23,3 @@ class SupplierDocument extends Model
 
     // Reviewer relationship removed with metadata columns
 }
-

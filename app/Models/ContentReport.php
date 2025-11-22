@@ -44,4 +44,3 @@ class ContentReport extends Model
         return $this->belongsTo(Admin::class, 'handled_by_admin_id');
     }
 }
-

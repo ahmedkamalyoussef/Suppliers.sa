@@ -20,7 +20,7 @@ class Branch extends Model
         'working_hours',
         'special_services',
         'status',
-        'is_main_branch'
+        'is_main_branch',
     ];
 
     protected $casts = [
@@ -28,7 +28,7 @@ class Branch extends Model
         'special_services' => 'array',
         'latitude' => 'decimal:6',
         'longitude' => 'decimal:6',
-        'is_main_branch' => 'boolean'
+        'is_main_branch' => 'boolean',
     ];
 
     public function supplier()

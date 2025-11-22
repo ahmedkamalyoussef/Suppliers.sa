@@ -4,20 +4,20 @@ namespace App\Http\Controllers;
 
 use App\Models\Admin;
 use App\Models\Branch;
+use App\Models\ContentReport;
 use App\Models\Supplier;
 use App\Models\SupplierDocument;
-use App\Models\SupplierRating;
-use App\Models\ContentReport;
 use App\Models\SupplierInquiry;
+use App\Models\SupplierRating;
+use App\Support\BranchSupport;
+use App\Support\Media;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Foundation\Validation\ValidatesRequests;
 use Illuminate\Routing\Controller as BaseController;
-use Illuminate\Support\Facades\URL;
-use Illuminate\Support\Str;
 
 abstract class Controller extends BaseController
 {
-	use AuthorizesRequests, ValidatesRequests;
+    use AuthorizesRequests, ValidatesRequests;
 
     protected function transformAdmin(Admin $admin): array
     {
@@ -242,15 +242,7 @@ abstract class Controller extends BaseController
 
     protected function mediaUrl(?string $path): ?string
     {
-        if (!$path) {
-            return null;
-        }
-
-        if (Str::startsWith($path, ['http://', 'https://'])) {
-            return $path;
-        }
-
-        return URL::to($path);
+        return Media::url($path);
     }
 
     protected function transformReport(ContentReport $report): array
@@ -291,14 +283,14 @@ abstract class Controller extends BaseController
             (bool) $supplier->phone,
             (bool) $profile?->business_name,
             (bool) $profile?->business_type,
-            !empty($profile?->business_categories),
-            !empty($profile?->services_offered),
+            ! empty($profile?->business_categories),
+            ! empty($profile?->services_offered),
             (bool) $profile?->description,
             (bool) $profile?->website,
             (bool) $profile?->business_address,
-            !empty($profile?->working_hours),
-            !empty($profile?->additional_phones),
-            !empty($profile?->keywords),
+            ! empty($profile?->working_hours),
+            ! empty($profile?->additional_phones),
+            ! empty($profile?->keywords),
             (bool) $supplier->profile_image,
             $supplier->branches()->exists(),
         ];
@@ -329,17 +321,6 @@ abstract class Controller extends BaseController
      */
     protected function defaultBranchHours(): array
     {
-        $days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
-        $hours = [];
-
-        foreach ($days as $day) {
-            $hours[$day] = [
-                'open' => $day === 'sunday' ? '10:00' : '09:00',
-                'close' => $day === 'sunday' ? '16:00' : '18:00',
-                'closed' => $day === 'sunday',
-            ];
-        }
-
-        return $hours;
+        return BranchSupport::defaultHours();
     }
 }

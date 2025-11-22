@@ -3,10 +3,10 @@
 namespace App\Notifications;
 
 use Illuminate\Bus\Queueable;
-use Illuminate\Notifications\Notification;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\DatabaseMessage;
 use Illuminate\Notifications\Messages\MailMessage;
+use Illuminate\Notifications\Notification;
 
 class CustomNotification extends Notification implements ShouldQueue
 {
@@ -32,13 +32,13 @@ class CustomNotification extends Notification implements ShouldQueue
         $channels = ['database'];
 
         // Add email channel if email notifications are enabled
-        if (isset($notifiable->notification_settings['email_notifications']) && 
+        if (isset($notifiable->notification_settings['email_notifications']) &&
             $notifiable->notification_settings['email_notifications']) {
             $channels[] = 'mail';
         }
 
         // Add push notification channel if enabled
-        if (isset($notifiable->notification_settings['push_notifications']) && 
+        if (isset($notifiable->notification_settings['push_notifications']) &&
             $notifiable->notification_settings['push_notifications']) {
             $channels[] = 'broadcast';
         }
@@ -53,7 +53,7 @@ class CustomNotification extends Notification implements ShouldQueue
     {
         return (new MailMessage)
             ->subject($this->data['title'] ?? 'Notification from Suppliers.sa')
-            ->greeting('Hello ' . $notifiable->name . '!')
+            ->greeting('Hello '.$notifiable->name.'!')
             ->line($this->data['message'] ?? 'You have a new notification.')
             ->action('View Details', $this->data['action_url'] ?? route('dashboard'))
             ->line('Thank you for using Suppliers.sa!');

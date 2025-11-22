@@ -12,11 +12,11 @@ class Otp extends Model
         'supplier_id',
         'otp',
         'expires_at',
-        'email'
+        'email',
     ];
 
     protected $casts = [
-        'expires_at' => 'datetime'
+        'expires_at' => 'datetime',
     ];
 
     public static function generateForUser($userId, $email = null)
@@ -30,7 +30,7 @@ class Otp extends Model
             'supplier_id' => null,
             'email' => $email,
             'otp' => str_pad(random_int(0, 999999), 6, '0', STR_PAD_LEFT),
-            'expires_at' => now()->addMinutes(10)
+            'expires_at' => now()->addMinutes(10),
         ]);
 
         return $otp;
@@ -48,7 +48,7 @@ class Otp extends Model
             'supplier_id' => null,
             'email' => $email,
             'otp' => str_pad(random_int(0, 999999), 6, '0', STR_PAD_LEFT),
-            'expires_at' => now()->addMinutes(10)
+            'expires_at' => now()->addMinutes(10),
         ]);
 
         return $otp;
@@ -66,7 +66,7 @@ class Otp extends Model
             'supplier_id' => $supplierId,
             'email' => $email,
             'otp' => str_pad(random_int(0, 999999), 6, '0', STR_PAD_LEFT),
-            'expires_at' => now()->addMinutes(10)
+            'expires_at' => now()->addMinutes(10),
         ]);
 
         return $otp;
@@ -74,6 +74,6 @@ class Otp extends Model
 
     public function isValid()
     {
-        return !$this->expires_at->isPast();
+        return ! $this->expires_at->isPast();
     }
 }

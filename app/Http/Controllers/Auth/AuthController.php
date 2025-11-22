@@ -3,9 +3,10 @@
 namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
+use App\Http\Resources\Supplier\SupplierResource;
 use App\Models\Admin;
-use App\Models\Supplier;
 use App\Models\Otp;
+use App\Models\Supplier;
 use App\Notifications\OtpNotification;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
@@ -20,10 +21,14 @@ class AuthController extends Controller
     protected function findUserByEmail(string $email)
     {
         $user = Admin::where('email', $email)->first();
-        if ($user) return ['user' => $user, 'type' => 'admin'];
+        if ($user) {
+            return ['user' => $user, 'type' => 'admin'];
+        }
 
         $user = Supplier::where('email', $email)->first();
-        if ($user) return ['user' => $user, 'type' => 'supplier'];
+        if ($user) {
+            return ['user' => $user, 'type' => 'supplier'];
+        }
 
         return null;
     }
@@ -35,22 +40,26 @@ class AuthController extends Controller
     {
         $validator = Validator::make($request->all(), [
             'email' => 'required|email',
-            'password' => 'required|string'
+            'password' => 'required|string',
         ]);
 
-        if ($validator->fails()) return response()->json($validator->errors(), 422);
+        if ($validator->fails()) {
+            return response()->json($validator->errors(), 422);
+        }
 
         $userInfo = $this->findUserByEmail($request->email);
-        if (!$userInfo) return response()->json(['message' => 'User not found'], 404);
+        if (! $userInfo) {
+            return response()->json(['message' => 'User not found'], 404);
+        }
 
         $user = $userInfo['user'];
-        if (!Hash::check($request->password, $user->password)) {
+        if (! Hash::check($request->password, $user->password)) {
             return response()->json(['message' => 'Invalid credentials'], 401);
         }
 
         // For admins, email verification is optional (can be null)
         // For suppliers, check email verification
-        if ($userInfo['type'] === 'supplier' && !$user->email_verified_at) {
+        if ($userInfo['type'] === 'supplier' && ! $user->email_verified_at) {
             return response()->json(['message' => 'Email not verified'], 403);
         }
 
@@ -66,7 +75,7 @@ class AuthController extends Controller
         $payloadKey = $userInfo['type'] === 'admin' ? 'admin' : 'supplier';
         $payloadValue = $userInfo['type'] === 'admin'
             ? $this->transformAdmin($user)
-            : $this->transformSupplier($user);
+            : (new SupplierResource($user))->toArray(request());
 
         return response()->json([
             'message' => 'Login successful',
@@ -85,8 +94,11 @@ class AuthController extends Controller
         $bearer = $request->bearerToken();
         if ($bearer) {
             $pat = PersonalAccessToken::findToken($bearer);
-            if ($pat) $pat->delete();
+            if ($pat) {
+                $pat->delete();
+            }
         }
+
         return response()->json(['message' => 'Logged out successfully']);
     }
 
@@ -96,10 +108,14 @@ class AuthController extends Controller
     public function sendOtp(Request $request)
     {
         $validator = Validator::make($request->all(), ['email' => 'required|email']);
-        if ($validator->fails()) return response()->json($validator->errors(), 422);
+        if ($validator->fails()) {
+            return response()->json($validator->errors(), 422);
+        }
 
         $userInfo = $this->findUserByEmail($request->email);
-        if (!$userInfo) return response()->json(['message' => 'User not found'], 404);
+        if (! $userInfo) {
+            return response()->json(['message' => 'User not found'], 404);
+        }
 
         $user = $userInfo['user'];
 
@@ -120,12 +136,16 @@ class AuthController extends Controller
     {
         $validator = Validator::make($request->all(), [
             'email' => 'required|email',
-            'otp' => 'required|numeric|digits:6'
+            'otp' => 'required|numeric|digits:6',
         ]);
-        if ($validator->fails()) return response()->json($validator->errors(), 422);
+        if ($validator->fails()) {
+            return response()->json($validator->errors(), 422);
+        }
 
         $userInfo = $this->findUserByEmail($request->email);
-        if (!$userInfo) return response()->json(['message' => 'User not found'], 404);
+        if (! $userInfo) {
+            return response()->json(['message' => 'User not found'], 404);
+        }
 
         $user = $userInfo['user'];
 
@@ -140,7 +160,9 @@ class AuthController extends Controller
                 ->where('expires_at', '>', now())
                 ->first();
 
-        if (!$otp) return response()->json(['message' => 'Invalid or expired OTP'], 422);
+        if (! $otp) {
+            return response()->json(['message' => 'Invalid or expired OTP'], 422);
+        }
 
         $user->email_verified_at = now();
         $user->save();
@@ -158,7 +180,7 @@ class AuthController extends Controller
         $payloadKey = $userInfo['type'] === 'admin' ? 'admin' : 'supplier';
         $payloadValue = $userInfo['type'] === 'admin'
             ? $this->transformAdmin($user)
-            : $this->transformSupplier($user);
+            : (new SupplierResource($user))->toArray(request());
 
         return response()->json([
             'message' => 'Email verified successfully',

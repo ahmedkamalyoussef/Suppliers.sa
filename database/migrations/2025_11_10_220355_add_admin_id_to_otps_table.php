@@ -13,7 +13,7 @@ return new class extends Migration
     {
         Schema::table('otps', function (Blueprint $table) {
             $table->unsignedBigInteger('admin_id')->nullable()->after('user_id')->index();
-            
+
             if (Schema::hasTable('admins')) {
                 $table->foreign('admin_id')->references('id')->on('admins')->onDelete('cascade');
             }

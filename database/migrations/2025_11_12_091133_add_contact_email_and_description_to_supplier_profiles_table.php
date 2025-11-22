@@ -12,11 +12,11 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('supplier_profiles', function (Blueprint $table) {
-            if (!Schema::hasColumn('supplier_profiles', 'contact_email')) {
+            if (! Schema::hasColumn('supplier_profiles', 'contact_email')) {
                 $table->string('contact_email')->nullable()->after('main_phone');
             }
 
-            if (!Schema::hasColumn('supplier_profiles', 'description')) {
+            if (! Schema::hasColumn('supplier_profiles', 'description')) {
                 $table->text('description')->nullable()->after('business_type');
             }
         });

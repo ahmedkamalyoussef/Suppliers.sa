@@ -11,7 +11,7 @@ return new class extends Migration
         Schema::table('suppliers', function (Blueprint $table) {
             // Drop the old boolean column
             $table->dropColumn('email_verified');
-            
+
             // Add the new timestamp column
             $table->timestamp('email_verified_at')->nullable();
         });

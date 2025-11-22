@@ -12,7 +12,7 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('admins', function (Blueprint $table) {
-            if (!Schema::hasColumn('admins', 'profile_image')) {
+            if (! Schema::hasColumn('admins', 'profile_image')) {
                 $table->string('profile_image')->nullable()->after('job_role');
             }
         });

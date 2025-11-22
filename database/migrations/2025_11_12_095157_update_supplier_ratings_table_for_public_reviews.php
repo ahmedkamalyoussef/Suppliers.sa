@@ -21,11 +21,11 @@ return new class extends Migration
                 $table->index('rated_supplier_id');
             }
 
-            if (!Schema::hasColumn('supplier_ratings', 'reviewer_name')) {
+            if (! Schema::hasColumn('supplier_ratings', 'reviewer_name')) {
                 $table->string('reviewer_name')->nullable()->after('comment');
             }
 
-            if (!Schema::hasColumn('supplier_ratings', 'reviewer_email')) {
+            if (! Schema::hasColumn('supplier_ratings', 'reviewer_email')) {
                 $table->string('reviewer_email')->nullable()->after('reviewer_name');
             }
         });

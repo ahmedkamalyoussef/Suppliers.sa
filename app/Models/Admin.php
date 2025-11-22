@@ -78,9 +78,10 @@ class Admin extends Authenticatable
      */
     public function hasPermission(string $permissionKey): bool
     {
-        if (!$this->permissions) {
+        if (! $this->permissions) {
             return false;
         }
+
         return (bool) data_get($this->permissions, $permissionKey, false);
     }
 }

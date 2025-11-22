@@ -9,7 +9,7 @@ return new class extends Migration
     public function up(): void
     {
         // USERS
-        if (!Schema::hasTable('users')) {
+        if (! Schema::hasTable('users')) {
             Schema::create('users', function (Blueprint $table) {
                 $table->id();
                 $table->string('name')->nullable();
@@ -23,7 +23,7 @@ return new class extends Migration
         }
 
         // SUPPLIERS
-        if (!Schema::hasTable('suppliers')) {
+        if (! Schema::hasTable('suppliers')) {
             Schema::create('suppliers', function (Blueprint $table) {
                 $table->id();
                 $table->string('name')->nullable();
@@ -38,7 +38,7 @@ return new class extends Migration
         }
 
         // SUPPLIER PROFILES
-        if (!Schema::hasTable('supplier_profiles')) {
+        if (! Schema::hasTable('supplier_profiles')) {
             Schema::create('supplier_profiles', function (Blueprint $table) {
                 $table->id();
                 $table->foreignId('supplier_id')->constrained()->onDelete('cascade');
@@ -62,7 +62,7 @@ return new class extends Migration
         }
 
         // BRANCHES
-        if (!Schema::hasTable('branches')) {
+        if (! Schema::hasTable('branches')) {
             Schema::create('branches', function (Blueprint $table) {
                 $table->id();
                 $table->foreignId('supplier_id')->constrained()->onDelete('cascade');
@@ -82,7 +82,7 @@ return new class extends Migration
         }
 
         // OTPS with two FKs: user_id and supplier_id (both nullable)
-        if (!Schema::hasTable('otps')) {
+        if (! Schema::hasTable('otps')) {
             Schema::create('otps', function (Blueprint $table) {
                 $table->id();
                 $table->unsignedBigInteger('user_id')->nullable()->index();
@@ -103,7 +103,7 @@ return new class extends Migration
         }
 
         // Personal access tokens (sanctum) - only create if missing
-        if (!Schema::hasTable('personal_access_tokens')) {
+        if (! Schema::hasTable('personal_access_tokens')) {
             Schema::create('personal_access_tokens', function (Blueprint $table) {
                 $table->id();
                 $table->morphs('tokenable');
@@ -116,7 +116,7 @@ return new class extends Migration
         }
 
         // jobs and cache tables (lightweight) if missing
-        if (!Schema::hasTable('jobs')) {
+        if (! Schema::hasTable('jobs')) {
             Schema::create('jobs', function (Blueprint $table) {
                 $table->bigIncrements('id');
                 $table->string('queue')->index();
@@ -128,7 +128,7 @@ return new class extends Migration
             });
         }
 
-        if (!Schema::hasTable('cache')) {
+        if (! Schema::hasTable('cache')) {
             Schema::create('cache', function (Blueprint $table) {
                 $table->string('key')->unique();
                 $table->longText('value');
