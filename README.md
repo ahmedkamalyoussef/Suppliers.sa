@@ -1,59 +1,185 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# Suppliers Management System
 
 <p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
+  <img src="https://laravel.com/img/logomark.min.svg" alt="Laravel" width="100">
+  <h1 align="center">Suppliers Management System</h1>
+  <p align="center">A comprehensive platform for managing suppliers and services</p>
 </p>
 
-## About Laravel
+## 📋 Table of Contents
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+- [Introduction](#-introduction)
+- [Features](#-features)
+- [Requirements](#-requirements)
+- [Installation](#-installation)
+- [Configuration](#-configuration)
+- [API Documentation](#-api-documentation)
+- [Deployment](#-deployment)
+- [Testing](#-testing)
+- [Contributing](#-contributing)
+- [Security](#-security)
+- [License](#-license)
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+## 🌟 Introduction
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+Suppliers Management System is a robust Laravel-based platform designed to streamline supplier management, document handling, and service tracking. It provides a seamless experience for both suppliers and administrators with intuitive dashboards and powerful features.
 
-## Learning Laravel
+## ✨ Features
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework. You can also check out [Laravel Learn](https://laravel.com/learn), where you will be guided through building a modern Laravel application.
+### Supplier Dashboard
+- User authentication and registration
+- Profile and document management
+- Branch and service management
+- Real-time notifications
+- Service ratings and reviews
 
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+### Admin Dashboard
+- Comprehensive supplier management
+- Document verification and approval
+- Advanced reporting and analytics
+- User activity monitoring
+- System configuration
 
-## Laravel Sponsors
+## 🛠 Requirements
 
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the [Laravel Partners program](https://partners.laravel.com).
+- PHP 8.1+
+- Composer 2.0+
+- MySQL 5.7+ or MariaDB 10.3+
+- Node.js 16+ and NPM 8+
+- Redis 6.0+
+- Web server (Nginx/Apache)
 
-### Premium Partners
+## 🚀 Installation
 
-- **[Vehikl](https://vehikl.com)**
-- **[Tighten Co.](https://tighten.co)**
-- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
-- **[64 Robots](https://64robots.com)**
-- **[Curotec](https://www.curotec.com/services/technologies/laravel)**
-- **[DevSquad](https://devsquad.com/hire-laravel-developers)**
-- **[Redberry](https://redberry.international/laravel-development)**
-- **[Active Logic](https://activelogic.com)**
+1. Clone the repository:
+```bash
+git clone https://github.com/ahmedkamalyoussef/Suppliers.sa.git
+cd Suppliers.sa
+```
 
-## Contributing
+2. Install PHP dependencies:
+```bash
+composer install --no-dev --optimize-autoloader
+```
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+3. Install NPM dependencies and build assets:
+```bash
+npm install
+npm run build
+```
 
-## Code of Conduct
+4. Configure environment:
+```bash
+cp .env.example .env
+php artisan key:generate
+```
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+5. Update `.env` with your database and mail configuration
 
-## Security Vulnerabilities
+6. Run database migrations and seeders:
+```bash
+php artisan migrate --seed --force
+```
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+7. Create storage link:
+```bash
+php artisan storage:link
+```
 
-## License
+8. Start the development server:
+```bash
+php artisan serve
+```
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+## ⚙️ Configuration
+
+### Environment Variables
+Key configuration options in `.env`:
+
+```env
+APP_ENV=production
+APP_DEBUG=false
+APP_URL=https://your-domain.com
+
+DB_CONNECTION=mysql
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_DATABASE=suppliers
+DB_USERNAME=root
+DB_PASSWORD=
+
+CACHE_DRIVER=redis
+QUEUE_CONNECTION=redis
+SESSION_DRIVER=redis
+
+MAIL_MAILER=smtp
+MAIL_HOST=smtp.mailtrap.io
+MAIL_PORT=2525
+MAIL_USERNAME=null
+MAIL_PASSWORD=null
+MAIL_ENCRYPTION=null
+MAIL_FROM_ADDRESS="hello@example.com"
+MAIL_FROM_NAME="${APP_NAME}"
+```
+
+### File Storage
+- Uploads are stored in `storage/app/public`
+- Ensure proper permissions:
+```bash
+chmod -R 775 storage
+chmod -R 775 bootstrap/cache
+```
+
+## 📚 API Documentation
+
+API documentation is available at `/api/documentation` after setting up the project.
+
+## 🚀 Deployment
+
+### Production Setup
+1. Configure your web server (Nginx/Apache)
+2. Set up SSL certificate
+3. Configure queue workers:
+```bash
+php artisan queue:work --daemon
+```
+
+### Scheduler Setup
+Add this to your server's crontab:
+```
+* * * * * cd /path-to-your-project && php artisan schedule:run >> /dev/null 2>&1
+```
+
+## 🧪 Testing
+
+Run PHPUnit tests:
+```bash
+composer test
+```
+
+Run PHPStan for static analysis:
+```bash
+composer analyse
+```
+
+## 🤝 Contributing
+
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
+3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
+4. Push to the branch (`git push origin feature/AmazingFeature`)
+5. Open a Pull Request
+
+## 🔒 Security
+
+If you discover any security vulnerabilities, please email security@example.com instead of using the issue tracker.
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## 🏛️ Credits
+
+- [Laravel](https://laravel.com)
+- [Vue.js](https://vuejs.org/)
+- [Tailwind CSS](https://tailwindcss.com/)
