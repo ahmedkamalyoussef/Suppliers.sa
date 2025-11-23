@@ -42,7 +42,7 @@ class SupplierProfileController extends Controller
                 'working_hours' => $supplier->profile->working_hours ?? null,
                 'services_offered' => $supplier->profile->services_offered ?? [],
             ],
-            'profile_image' => $supplier->profile_image ? asset('storage/' . $supplier->profile_image) : null,
+            'profile_image' => $supplier->profile_image ? asset($supplier->profile_image) : null,
             'ratings' => [
                 'average' => $supplier->approvedRatings->avg('rating'),
                 'count' => $supplier->approvedRatings->count(),
@@ -54,7 +54,7 @@ class SupplierProfileController extends Controller
                         'created_at' => $review->created_at->toDateTimeString(),
                         'user' => [
                             'name' => $review->rater->name ?? null,
-                            'avatar' => $review->rater->profile_image ? asset('storage/' . $review->rater->profile_image) : null
+                            'avatar' => $review->rater->profile_image ? asset($review->rater->profile_image) : null
                         ]
                     ];
                 })
@@ -68,7 +68,7 @@ class SupplierProfileController extends Controller
             'product_images' => $supplier->productImages->map(function($image) {
                 return [
                     'id' => $image->id,
-                    'image_url' => $image->image_url ? asset('storage/' . $image->image_url) : null
+                    'image_url' => $image->image_url ? asset($image->image_url) : null
                 ];
             })->filter(function($image) {
                 return $image['image_url'] !== null;

@@ -28,18 +28,18 @@ class ProductImageController extends BaseSupplierController
             'image' => 'required|image|max:5120', // 5MB max
         ]);
 
-        $destDir = public_path('uploads/productImages');
+        $destDir = 'uploads/productImages/';
         
         // Create directory if it doesn't exist
-        if (!File::exists($destDir)) {
-            File::makeDirectory($destDir, 0755, true);
+        if (!File::exists(public_path($destDir))) {
+            File::makeDirectory(public_path($destDir), 0755, true);
         }
 
         $file = $request->file('image');
         $filename = Str::uuid() . '.' . $file->getClientOriginalExtension();
-        $file->move($destDir, $filename);
+        $file->move(public_path($destDir), $filename);
         
-        $imageUrl = 'uploads/productImages/' . $filename;
+        $imageUrl = $destDir . $filename;
         
         $image = $supplier->productImages()->create([
             'image_url' => url($imageUrl),
@@ -52,17 +52,17 @@ class ProductImageController extends BaseSupplierController
     {
         $this->authorize('delete', $image);
         
-        // Delete the file from storage
+        // Delete the file from public directory
         $path = parse_url($image->image_url, PHP_URL_PATH);
-        $filePath = public_path($path);
+        $path = ltrim($path, '/'); // Remove leading slash
         
-        if (File::exists($filePath)) {
-            File::delete($filePath);
+        if (File::exists(public_path($path))) {
+            File::delete(public_path($path));
         }
         
         $image->delete();
         
-        return response()->noContent();
+        return response()->json(null, 204);
     }
 
     public function reorder(Request $request)
