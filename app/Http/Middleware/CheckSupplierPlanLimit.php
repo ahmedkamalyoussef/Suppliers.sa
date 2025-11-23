@@ -27,6 +27,11 @@ class CheckSupplierPlanLimit
                 return response()->json(['message' => 'Unauthenticated.'], 401);
             }
 
+            // Bypass limit check for certifications
+            if ($relation === 'certifications') {
+                return $next($request);
+            }
+
             // Admins bypass the limit
             if (method_exists($supplier, 'isAdmin') && $supplier->isAdmin()) {
                 return $next($request);

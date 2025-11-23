@@ -87,6 +87,9 @@ Route::post('/admins/register-super', [AdminController::class, 'registerSuper'])
 */
 Route::middleware('auth:sanctum')->group(function () {
 
+    // Protected supplier profile endpoint
+    Route::get('/suppliers/{id}', 'App\\Http\\Controllers\\Public\\SupplierProfileController@show');
+
     // Shared
     Route::post('/auth/logout', [AuthController::class, 'logout']);
     Route::post('/auth/change-password', [PasswordController::class, 'changePassword']);
