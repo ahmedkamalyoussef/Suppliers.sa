@@ -30,6 +30,9 @@ use App\Http\Controllers\Supplier\SupplierDashboardController;
 use App\Http\Controllers\Supplier\SupplierDocumentController;
 use App\Http\Controllers\Supplier\SupplierInquiryController;
 use App\Http\Controllers\Supplier\SupplierRatingController;
+use App\Http\Controllers\Supplier\ProductImageController;
+use App\Http\Controllers\Supplier\ServiceController;
+use App\Http\Controllers\Supplier\CertificationController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -95,9 +98,27 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/profile', [AdminController::class, 'getProfile']);
         Route::put('/profile', [AdminController::class, 'updateProfile']);
         Route::post('/profile/image', [AdminController::class, 'updateProfileImage']);
+        // Admin Supplier Management
         Route::get('/suppliers', [AdminSupplierController::class, 'index']);
         Route::get('/suppliers/{supplier}', [AdminSupplierController::class, 'show']);
         Route::put('/suppliers/{supplier}', [AdminSupplierController::class, 'update']);
+        
+        // Admin Supplier Product Images
+        Route::get('/suppliers/{supplier}/product-images', [AdminProductImageController::class, 'index']);
+        Route::post('/suppliers/{supplier}/product-images', [AdminProductImageController::class, 'store']);
+        Route::delete('/suppliers/{supplier}/product-images/{image}', [AdminProductImageController::class, 'destroy']);
+        
+        // Admin Supplier Services
+        Route::get('/suppliers/{supplier}/services', [AdminServiceController::class, 'index']);
+        Route::post('/suppliers/{supplier}/services', [AdminServiceController::class, 'store']);
+        Route::put('/suppliers/{supplier}/services/{service}', [AdminServiceController::class, 'update']);
+        Route::delete('/suppliers/{supplier}/services/{service}', [AdminServiceController::class, 'destroy']);
+        
+        // Admin Supplier Certifications
+        Route::get('/suppliers/{supplier}/certifications', [AdminCertificationController::class, 'index']);
+        Route::post('/suppliers/{supplier}/certifications', [AdminCertificationController::class, 'store']);
+        Route::put('/suppliers/{supplier}/certifications/{certification}', [AdminCertificationController::class, 'update']);
+        Route::delete('/suppliers/{supplier}/certifications/{certification}', [AdminCertificationController::class, 'destroy']);
         Route::post('/suppliers/{supplier}/status', [AdminSupplierController::class, 'updateStatus']);
         Route::delete('/suppliers/{supplier}', [AdminSupplierController::class, 'destroy']);
         Route::get('/ratings', [AdminRatingController::class, 'index']);
@@ -135,6 +156,29 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/dashboard/analytics', [SupplierDashboardController::class, 'analytics']);
         Route::get('/profile', [SupplierAuthController::class, 'getProfile']);
         Route::put('/profile', [SupplierAuthController::class, 'updateProfile']);
+        
+        // Product Images
+        Route::get('/product-images', [ProductImageController::class, 'index']);
+        Route::post('/product-images', [ProductImageController::class, 'store'])
+            ->middleware('App\Http\Middleware\CheckSupplierPlanLimit:productImages,8');
+        Route::delete('/product-images/{image}', [ProductImageController::class, 'destroy']);
+        Route::post('/product-images/reorder', [ProductImageController::class, 'reorder']);
+        
+        // Services
+        Route::get('/services', [ServiceController::class, 'index']);
+        Route::post('/services', [ServiceController::class, 'store'])
+            ->middleware('App\Http\Middleware\CheckSupplierPlanLimit:services,8');
+        Route::put('/services/{service}', [ServiceController::class, 'update']);
+        Route::delete('/services/{service}', [ServiceController::class, 'destroy']);
+        Route::post('/services/reorder', [ServiceController::class, 'reorder']);
+        
+        // Certifications
+        Route::get('/certifications', [CertificationController::class, 'index']);
+        Route::post('/certifications', [CertificationController::class, 'store'])
+            ->middleware('App\Http\Middleware\CheckSupplierPlanLimit:certifications,8');
+        Route::put('/certifications/{certification}', [CertificationController::class, 'update']);
+        Route::delete('/certifications/{certification}', [CertificationController::class, 'destroy']);
+        Route::post('/certifications/reorder', [CertificationController::class, 'reorder']);
         Route::patch('/profile', [SupplierAuthController::class, 'updateProfilePartial']);
         Route::post('/profile/image', [SupplierAuthController::class, 'updateProfileImage']);
         // Ratings

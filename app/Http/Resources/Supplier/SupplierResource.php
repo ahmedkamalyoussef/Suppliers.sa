@@ -6,6 +6,9 @@ use App\Models\Branch;
 use App\Support\Media;
 use Illuminate\Http\Resources\Json\JsonResource;
 use App\Http\Resources\Public\BranchResource;
+use App\Http\Resources\Supplier\SupplierCertificationResource;
+use App\Http\Resources\Supplier\SupplierProductImageResource;
+use App\Http\Resources\Supplier\SupplierServiceResource;
 
 class SupplierResource extends JsonResource
 {
@@ -61,6 +64,41 @@ class SupplierResource extends JsonResource
             'branches' => $withRelations ? $supplier->branches->map(function (Branch $branch) {
                 return (new BranchResource($branch))->toArray(request());
             })->toArray() : null,
+            'product_images' => $withRelations ? $supplier->productImages->map(function ($image) {
+                return [
+                    'id' => $image->id,
+                    'image_url' => $image->image_url,
+                    'sort_order' => $image->sort_order,
+                    'created_at' => $image->created_at->toIso8601String(),
+                    'updated_at' => $image->updated_at->toIso8601String(),
+                ];
+            })->values() : null,
+            'services' => $withRelations ? $supplier->services->map(function ($service) {
+                return [
+                    'id' => $service->id,
+                    'service_name' => $service->service_name,
+                    'description' => $service->description,
+                    'sort_order' => $service->sort_order,
+                    'created_at' => $service->created_at->toIso8601String(),
+                    'updated_at' => $service->updated_at->toIso8601String(),
+                ];
+            })->values() : null,
+            'certifications' => $withRelations ? $supplier->certifications->map(function ($cert) {
+                return [
+                    'id' => $cert->id,
+                    'certification_name' => $cert->certification_name,
+                    'issuing_organization' => $cert->issuing_organization,
+                    'issue_date' => $cert->issue_date ? $cert->issue_date->format('Y-m-d') : null,
+                    'expiry_date' => $cert->expiry_date ? $cert->expiry_date->format('Y-m-d') : null,
+                    'certificate_number' => $cert->certificate_number,
+                    'certificate_url' => $cert->certificate_url,
+                    'description' => $cert->description,
+                    'sort_order' => $cert->sort_order,
+                    'is_expired' => $cert->is_expired,
+                    'created_at' => $cert->created_at->toIso8601String(),
+                    'updated_at' => $cert->updated_at->toIso8601String(),
+                ];
+            })->values() : null,
         ], function ($value) {
             return $value !== null;
         });

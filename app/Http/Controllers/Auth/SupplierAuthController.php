@@ -289,7 +289,7 @@ class SupplierAuthController extends Controller
 
     public function updateProfileImage(Request $request)
     {
-        $request->validate(['profile_image' => 'required|image|mimes:jpeg,png,jpg|max:2048']);
+        $request->validate(['profile_image' => 'required|image']);
 
         $supplier = $request->user();
         $destDir = public_path('uploads/suppliers');

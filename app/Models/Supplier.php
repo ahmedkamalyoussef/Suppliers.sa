@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Supplier extends Authenticatable
 {
@@ -75,5 +76,20 @@ class Supplier extends Authenticatable
     public function reportsSubmitted()
     {
         return $this->hasMany(ContentReport::class, 'reported_by_supplier_id');
+    }
+
+    public function productImages(): HasMany
+    {
+        return $this->hasMany(SupplierProductImage::class);
+    }
+
+    public function services(): HasMany
+    {
+        return $this->hasMany(SupplierService::class);
+    }
+
+    public function certifications(): HasMany
+    {
+        return $this->hasMany(SupplierCertification::class);
     }
 }
