@@ -5,14 +5,16 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-class SupplierProductImage extends Model
+class SupplierProduct extends Model
 {
     protected $fillable = [
         'supplier_id',
-        'image_url',
-        'name',
+        'product_name',
     ];
 
+    /**
+     * Get the supplier that owns the product.
+     */
     public function supplier(): BelongsTo
     {
         return $this->belongsTo(Supplier::class);

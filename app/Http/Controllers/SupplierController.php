@@ -1,14 +1,20 @@
 <?php
 
-namespace App\Http\Controllers\Public;
+namespace App\Http\Controllers;
 
-use App\Http\Controllers\Controller;
 use App\Models\Supplier;
-use Illuminate\Http\Request;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\Auth;
 
-class SupplierProfileController extends Controller
+class SupplierController extends Controller
 {
-    public function show($id)
+    /**
+     * Get supplier business details with products
+     *
+     * @param int $id
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function getSupplierBusiness($id): JsonResponse
     {
         $supplier = Supplier::with([
             'profile',
@@ -16,7 +22,8 @@ class SupplierProfileController extends Controller
             'ratingsReceived.rater',
             'approvedRatings',
             'certifications',
-            'productImages'
+            'productImages',
+            'products'
         ])->findOrFail($id);
         
         // Eager load the rater relationship for approved ratings
@@ -32,9 +39,9 @@ class SupplierProfileController extends Controller
                 'contact_email' => $supplier->profile->contact_email ?? null,
                 'description' => $supplier->profile->description ?? null,
                 'service_distance' => $supplier->profile->service_distance ?? null,
-                'target_market' => is_array($supplier->profile->target_market) && !empty($supplier->profile->target_market[0]) ? 
+                'target_market' => is_array($supplier->profile->target_market ?? null) && !empty($supplier->profile->target_market[0]) ? 
                     array_map('trim', explode(',', $supplier->profile->target_market[0])) : 
-                    (is_string($supplier->profile->target_market) ? 
+                    (is_string($supplier->profile->target_market ?? null) ? 
                         array_map('trim', explode(',', $supplier->profile->target_market)) : 
                         []),
                 'main_phone' => $supplier->profile->main_phone ?? null,
@@ -83,6 +90,14 @@ class SupplierProfileController extends Controller
                 return [
                     'id' => $service->id,
                     'service_name' => $service->service_name
+                ];
+            }),
+            'products' => $supplier->products->map(function($product) {
+                return [
+                    'id' => $product->id,
+                    'product_name' => $product->product_name,
+                    'created_at' => $product->created_at->toDateTimeString(),
+                    'updated_at' => $product->updated_at->toDateTimeString()
                 ];
             })
         ]);

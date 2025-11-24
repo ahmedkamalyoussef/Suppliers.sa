@@ -59,6 +59,7 @@ class SupplierAuthController extends Controller
             'profile_image' => 'uploads/default.png',
             'plan' => 'Basic',
             'status' => 'pending',
+            'role' => 'supplier', // Add default role
         ]);
 
         $profile = SupplierProfile::create([
@@ -100,11 +101,15 @@ class SupplierAuthController extends Controller
         $supplier->forceFill(['last_seen_at' => now()])->save();
         $supplier->load('profile');
 
+        $supplierArray = (new SupplierResource($supplier))->toArray($request);
+        $supplierArray['role'] = 'supplier'; // Add role to the response
+        
         return response()->json([
             'message' => 'Login successful',
-            'supplier' => (new SupplierResource($supplier))->toArray($request),
+            'supplier' => $supplierArray,
             'accessToken' => $token,
             'tokenType' => 'Bearer',
+            'role' => 'supplier', // Also add role at the root level for easier access
         ]);
     }
 
@@ -168,11 +173,15 @@ class SupplierAuthController extends Controller
         $token = $supplier->createToken('auth-token')->plainTextToken;
         $supplier->load('profile');
 
+        $supplierArray = (new SupplierResource($supplier))->toArray($request);
+        $supplierArray['role'] = 'supplier';
+        
         return response()->json([
             'message' => 'Email verified successfully',
-            'supplier' => (new SupplierResource($supplier))->toArray($request),
+            'supplier' => $supplierArray,
             'accessToken' => $token,
             'tokenType' => 'Bearer',
+            'role' => 'supplier',
         ]);
     }
 

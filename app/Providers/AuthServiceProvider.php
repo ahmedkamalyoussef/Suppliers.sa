@@ -3,10 +3,12 @@
 namespace App\Providers;
 
 use App\Models\SupplierCertification;
+use App\Models\SupplierProduct;
 use App\Models\SupplierProductImage;
 use App\Models\SupplierService;
 use App\Policies\SupplierCertificationPolicy;
 use App\Policies\SupplierProductImagePolicy;
+use App\Policies\SupplierProductPolicy;
 use App\Policies\SupplierServicePolicy;
 use Illuminate\Foundation\Support\Providers\AuthServiceProvider as ServiceProvider;
 use Illuminate\Support\Facades\Gate;
@@ -20,6 +22,7 @@ class AuthServiceProvider extends ServiceProvider
      */
     protected $policies = [
         SupplierProductImage::class => SupplierProductImagePolicy::class,
+        SupplierProduct::class => SupplierProductPolicy::class,
         SupplierService::class => SupplierServicePolicy::class,
         SupplierCertification::class => SupplierCertificationPolicy::class,
     ];

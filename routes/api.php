@@ -32,6 +32,7 @@ use App\Http\Controllers\Supplier\SupplierInquiryController;
 use App\Http\Controllers\Supplier\SupplierRatingController;
 use App\Http\Controllers\Supplier\ProductImageController;
 use App\Http\Controllers\Supplier\ServiceController;
+use App\Http\Controllers\Supplier\SupplierProductController;
 use App\Http\Controllers\Supplier\CertificationController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -86,6 +87,9 @@ Route::post('/admins/register-super', [AdminController::class, 'registerSuper'])
 ||--------------------------------------------------------------------------
 */
 Route::middleware('auth:sanctum')->group(function () {
+
+    // Get supplier business with products
+    Route::get('/suppliers/{id}/business', 'App\\Http\\Controllers\\SupplierController@getSupplierBusiness');
 
     // Protected supplier profile endpoint
     Route::get('/suppliers/{id}', 'App\\Http\\Controllers\\Public\\SupplierProfileController@show');
@@ -161,7 +165,11 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::put('/profile', [SupplierAuthController::class, 'updateProfile']);
         
         // Product Images
-        Route::get('/product-images', [ProductImageController::class, 'index']);
+        Route::apiResource('product-images', ProductImageController::class)->except(['update']);
+        
+        // Products
+        Route::apiResource('products', SupplierProductController::class);
+        
         Route::post('/product-images', [ProductImageController::class, 'store'])
             ->middleware('App\Http\Middleware\CheckSupplierPlanLimit:productImages,8');
         Route::delete('/product-images/{image}', [ProductImageController::class, 'destroy']);

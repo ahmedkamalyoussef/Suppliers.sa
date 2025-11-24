@@ -21,6 +21,7 @@ class Supplier extends Authenticatable
         'plan',
         'status',
         'last_seen_at',
+        'role',
     ];
 
     protected $hidden = [
@@ -48,6 +49,11 @@ class Supplier extends Authenticatable
         return $this->hasMany(SupplierRating::class, 'rater_supplier_id');
     }
 
+    public function ratings()
+    {
+        return $this->hasMany(SupplierRating::class, 'rated_supplier_id');
+    }
+    
     public function ratingsReceived()
     {
         return $this->hasMany(SupplierRating::class, 'rated_supplier_id');
@@ -81,6 +87,14 @@ class Supplier extends Authenticatable
     public function productImages(): HasMany
     {
         return $this->hasMany(SupplierProductImage::class);
+    }
+    
+    /**
+     * Get the products for the supplier.
+     */
+    public function products(): HasMany
+    {
+        return $this->hasMany(SupplierProduct::class);
     }
 
     public function services(): HasMany

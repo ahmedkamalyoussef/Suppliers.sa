@@ -14,7 +14,7 @@ class ProductImageController extends BaseSupplierController
     public function index()
     {
         $supplier = $this->getSupplier();
-        $images = $supplier->productImages()->get();
+        $images = $supplier->productImages()->get(['id', 'image_url', 'name']);
         
         return response()->json($images);
     }
@@ -26,6 +26,7 @@ class ProductImageController extends BaseSupplierController
 
         $validated = $request->validate([
             'image' => 'required|image|max:5120', // 5MB max
+            'name' => 'nullable|string|max:255',
         ]);
 
         $destDir = 'uploads/productImages/';
@@ -43,6 +44,7 @@ class ProductImageController extends BaseSupplierController
         
         $image = $supplier->productImages()->create([
             'image_url' => url($imageUrl),
+            'name' => $validated['name'] ?? $file->getClientOriginalName(),
         ]);
 
         return response()->json($image, 201);

@@ -107,24 +107,31 @@ class SupplierRatingController extends Controller
     public function store(Request $request)
     {
         $user = $request->user();
-        if (! ($user instanceof Supplier)) {
-            return response()->json(['message' => 'Only suppliers can create ratings'], 403);
-        }
-
-        if (! $request->has('rated_supplier_id') && $request->filled('ratedSupplierId')) {
-            $request->merge(['rated_supplier_id' => $request->input('ratedSupplierId')]);
-        }
 
         $validator = Validator::make($request->all(), [
             'rated_supplier_id' => 'required|exists:suppliers,id',
             'score' => 'required|integer|min:1|max:5',
-            'comment' => 'nullable|string',
+            'comment' => 'nullable|string|max:1000',
         ]);
 
+        // Check for self-rating
         if ((int) $request->rated_supplier_id === (int) $user->id) {
             $validator->after(function ($v) {
                 $v->errors()->add('rated_supplier_id', 'You cannot rate yourself');
             });
+        }
+
+        // Check for existing rating
+        $existingRating = SupplierRating::where('rater_supplier_id', $user->id)
+            ->where('rated_supplier_id', $request->rated_supplier_id)
+            ->first();
+
+        if ($existingRating) {
+            return response()->json([
+                'message' => 'You have already rated this supplier',
+                'error' => 'duplicate_rating',
+                'existing_rating' => (new RatingResource($existingRating))->toArray($request)
+            ], 422);
         }
 
         if ($validator->fails()) {
@@ -144,7 +151,6 @@ class SupplierRatingController extends Controller
 
         return response()->json([
             'message' => 'Rating submitted and awaiting approval',
-            'rating' => (new RatingResource($rating))->toArray(request()),
         ], 201);
     }
 
