@@ -35,6 +35,7 @@ class SupplierController extends Controller
             'status' => $supplier->status,
             'profile' => [
                 'business_type' => $supplier->profile->business_type ?? null,
+                'category' => $supplier->profile->category ?? null,
                 'website' => $supplier->profile->website ?? null,
                 'contact_email' => $supplier->profile->contact_email ?? null,
                 'description' => $supplier->profile->description ?? null,
@@ -51,7 +52,10 @@ class SupplierController extends Controller
                 'longitude' => $supplier->profile->longitude ?? null,
                 'working_hours' => $supplier->profile->working_hours ?? null,
                 'services_offered' => $supplier->profile->services_offered ?? [],
+                // Supplier profile's image (from supplier_profiles table)
+                'business_image' => $supplier->profile->business_image ? asset($supplier->profile->business_image) : null,
             ],
+            // Supplier's profile image (from users table)
             'profile_image' => $supplier->profile_image ? asset($supplier->profile_image) : null,
             'ratings' => [
                 'average' => $supplier->approvedRatings->avg('score'),

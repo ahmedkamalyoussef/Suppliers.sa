@@ -191,7 +191,28 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::delete('/certifications/{certification}', [CertificationController::class, 'destroy']);
         Route::post('/certifications/reorder', [CertificationController::class, 'reorder']);
         Route::patch('/profile', [SupplierAuthController::class, 'updateProfilePartial']);
-        Route::post('/profile/image', [SupplierAuthController::class, 'updateProfileImage']);
+        
+        // Profile and Business Images
+        Route::post('/profile/image', 'App\Http\Controllers\Supplier\SupplierProfileImageController@update');
+        Route::post('/business/image', 'App\Http\Controllers\Supplier\SupplierBusinessImageController@update');
+        
+        // Profile Category
+        Route::patch('/profile/category', function (Request $request) {
+            $request->validate([
+                'category' => 'required|string|max:255',
+            ]);
+            
+            $supplier = $request->user();
+            $supplier->profile->update([
+                'category' => $request->category
+            ]);
+            
+            return response()->json([
+                'message' => 'تم تحديث التصنيف بنجاح',
+                'category' => $request->category
+            ]);
+        });
+        
         // Ratings
         Route::get('/ratings', [SupplierRatingController::class, 'index']);
         Route::post('/ratings', [SupplierRatingController::class, 'store']);

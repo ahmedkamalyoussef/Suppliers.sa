@@ -9,7 +9,27 @@ class SupplierProfile extends Model
 {
     use HasFactory;
 
-    protected $guarded = ['id'];
+    protected $fillable = [
+        'business_name',
+        'business_type',
+        'description',
+        'website',
+        'main_phone',
+        'business_address',
+        'latitude',
+        'longitude',
+        'contact_email',
+        'business_categories',
+        'keywords',
+        'target_market',
+        'services_offered',
+        'additional_phones',
+        'working_hours',
+        'has_branches',
+        'service_distance',
+        'category',
+        'business_image'
+    ];
 
     protected $casts = [
         'business_categories' => 'array',

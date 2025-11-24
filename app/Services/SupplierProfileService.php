@@ -23,6 +23,10 @@ class SupplierProfileService
             $profileData['business_type'] = $request->businessType;
         }
 
+        if ($request->has('category')) {
+            $profileData['category'] = $request->category;
+        }
+
         if ($request->has('categories') || $request->has('category')) {
             $categories = $request->input('categories', []);
             if (! $categories && $request->filled('category')) {

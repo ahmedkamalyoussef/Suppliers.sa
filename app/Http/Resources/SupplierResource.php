@@ -19,7 +19,7 @@ class SupplierResource extends JsonResource
             'name' => $this->name,
             'email' => $this->email,
             'phone' => $this->phone,
-            'profile_image' => $this->profile_image ? asset($this->profile_image) : null,
+            'profile_image' => $this->profile_image ? asset($this->profile_image) : null, // Supplier's profile image
             'status' => $this->status,
             'created_at' => $this->created_at?->toIso8601String(),
             'updated_at' => $this->updated_at?->toIso8601String(),
@@ -33,6 +33,8 @@ class SupplierResource extends JsonResource
                     'business_address' => $this->profile->business_address ?? null,
                     'latitude' => $this->profile->latitude ?? null,
                     'longitude' => $this->profile->longitude ?? null,
+                    'category' => $this->profile->category ?? null,
+                    'business_image' => $this->profile->business_image ? asset($this->profile->business_image) : null, // Supplier profile's image (from public/uploads/businessImages)
                 ];
             }),
         ];
