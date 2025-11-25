@@ -238,7 +238,8 @@ private function isOpenNow($hours, string $day, string $now)
                     ->orWhereHas('profile', function (Builder $profileQuery) use ($search) {
                         $profileQuery->where('business_name', 'like', "%{$search}%")
                             ->orWhere('description', 'like', "%{$search}%")
-                            ->orWhereJsonContains('keywords', $search);
+                            ->orWhereJsonContains('keywords', $search)
+                            ->orWhereJsonContains('services_offered', $search);
                     })
                     ->orWhereHas('products', function (Builder $productQuery) use ($search) {
                         $productQuery->where('product_name', 'like', "%{$search}%");
