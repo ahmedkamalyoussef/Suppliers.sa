@@ -12,6 +12,117 @@ use App\Http\Resources\Public\BranchResource;
 
 class PublicBusinessController extends Controller
 {
+    /**
+     * Get business statistics
+     * 
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function getStats()
+    {
+        $now = now();
+        $day = strtolower($now->format('l'));
+        $currentTime = $now->format('H:i:s');
+        $startOfWeek = $now->copy()->startOfWeek();
+
+        // statuses
+        $validStatuses = ['active', 'approved', 'pending'];
+
+        // All suppliers
+        $suppliers = Supplier::whereIn('status', $validStatuses)
+            ->with(['profile', 'branches'])
+            ->get();
+
+        $totalBusinesses = $suppliers->count();
+        $openNowCount = 0;
+
+        foreach ($suppliers as $supplier) {
+            $isOpen = false;
+            
+            // Check main business working hours only
+            if ($supplier->profile && $supplier->profile->working_hours) {
+                $hours = $supplier->profile->working_hours;
+                
+                if (isset($hours[$day])) {
+                    $daySchedule = $hours[$day];
+                    
+                    // Check if the business should be open based on time, regardless of closed flag
+                    $isOpen = $currentTime >= $daySchedule['open'] && 
+                             $currentTime <= $daySchedule['close'];
+                    
+                    $debug[$supplier->id] = [
+                        'supplier_name' => $supplier->name,
+                        'day' => $day,
+                        'current_time' => $currentTime,
+                        'open_time' => $daySchedule['open'],
+                        'close_time' => $daySchedule['close'],
+                        'is_closed' => $daySchedule['closed'] ? 'yes' : 'no',
+                        'is_open' => $isOpen ? 'yes' : 'no',
+                        'reason' => $daySchedule['closed'] ? 'marked_closed_but_open_by_hours' : 
+                                   ($currentTime < $daySchedule['open'] ? 'before_opening' : 
+                                   ($currentTime > $daySchedule['close'] ? 'after_closing' : 'open'))
+                    ];
+                }
+            }
+            
+            if ($isOpen) {
+                $openNowCount++;
+            }
+        }
+
+        // Count new this week
+        $newThisWeekCount = Supplier::whereIn('status', $validStatuses)
+            ->where('created_at', '>=', $startOfWeek)
+            ->count();
+
+        $response = [
+            'total_businesses' => $totalBusinesses,
+            'total_suppliers' => $totalBusinesses,
+            'open_now' => $openNowCount,
+            'new_this_week' => $newThisWeekCount,
+        ];
+        
+        return response()->json($response);
+}
+
+/* ------------------------------------------
+|  CHECK IF SUPPLIER OR ANY BRANCH IS OPEN
+--------------------------------------------*/
+private function isSupplierOpen($supplier, string $day, string $now)
+{
+    // Try main profile
+    if ($supplier->profile && $this->isOpenNow($supplier->profile->working_hours, $day, $now)) {
+        return true;
+    }
+
+    // Try branches
+    foreach ($supplier->branches as $branch) {
+        if ($this->isOpenNow($branch->working_hours, $day, $now)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+/* ------------------------------------------
+|  UNIVERSAL TIME CHECKER
+--------------------------------------------*/
+private function isOpenNow($hours, string $day, string $now)
+{
+    if (!$hours || !isset($hours[$day])) {
+        return false;
+    }
+
+    $d = $hours[$day];
+
+    if ($d['closed']) {
+        return false;
+    }
+
+    return $now >= $d['open'] && $now <= $d['close'];
+}
+
+    
     public function index(Request $request)
     {
         $perPage = (int) $request->input('per_page', 12);
@@ -100,6 +211,7 @@ class PublicBusinessController extends Controller
     {
         // Support both 'query' and 'keyword' for search
         $search = $request->input('keyword') ?: $request->input('query');
+        $address = $request->input('address');
 
         // Filter by approved status (only apply if isApproved=true is explicitly set)
         if ($request->has('isApproved') && filter_var($request->input('isApproved'), FILTER_VALIDATE_BOOLEAN)) {
@@ -119,15 +231,28 @@ class PublicBusinessController extends Controller
             });
         }
 
+        // Search by keyword (excludes address)
         if ($search) {
             $query->where(function (Builder $builder) use ($search) {
                 $builder->where('suppliers.name', 'like', "%{$search}%")
                     ->orWhereHas('profile', function (Builder $profileQuery) use ($search) {
                         $profileQuery->where('business_name', 'like', "%{$search}%")
-                            ->orWhere('business_address', 'like', "%{$search}%")
                             ->orWhere('description', 'like', "%{$search}%")
                             ->orWhereJsonContains('keywords', $search);
+                    })
+                    ->orWhereHas('products', function (Builder $productQuery) use ($search) {
+                        $productQuery->where('product_name', 'like', "%{$search}%");
+                    })
+                    ->orWhereHas('services', function (Builder $serviceQuery) use ($search) {
+                        $serviceQuery->where('service_name', 'like', "%{$search}%");
                     });
+            });
+        }
+
+        // Search by address (separate parameter)
+        if ($address) {
+            $query->whereHas('profile', function (Builder $profileQuery) use ($address) {
+                $profileQuery->where('business_address', 'like', "%{$address}%");
             });
         }
 

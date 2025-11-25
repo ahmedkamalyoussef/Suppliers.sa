@@ -61,6 +61,10 @@ Route::prefix('auth')->group(function () {
 ||--------------------------------------------------------------------------
 */
 Route::prefix('public')->group(function () {
+    // Business statistics
+    Route::get('/stats', [PublicBusinessController::class, 'getStats']);
+    
+    // Business endpoints
     Route::get('/businesses', [PublicBusinessController::class, 'index']);
     Route::get('/businesses/{slug}', [PublicBusinessController::class, 'show']);
     Route::get('/businesses/{slug}/reviews', [PublicBusinessReviewController::class, 'index']);
