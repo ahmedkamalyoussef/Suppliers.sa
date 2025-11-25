@@ -22,6 +22,11 @@ class PublicBusinessController extends Controller
             ->withAvg('approvedRatings as rating_average', 'score')
             ->withCount('approvedRatings as rating_count');
 
+        // Always exclude the current supplier's business if they are logged in
+        if (auth()->check()) {
+            $suppliers->where('id', '!=', auth()->id());
+        }
+
         $suppliers = $this->applyFilters($suppliers, $request);
 
         $suppliers = $this->applySorting($suppliers, $request);
@@ -66,15 +71,8 @@ class PublicBusinessController extends Controller
                 'current_page' => $paginator->currentPage(),
                 'per_page' => $paginator->perPage(),
                 'total' => $paginator->total(),
-                'last_page' => $paginator->lastPage(),
-                'from' => $paginator->firstItem(),
-                'to' => $paginator->lastItem(),
-            ],
-            'filters' => [
-                'categories' => $availableCategories,
-                'locations' => $availableLocations,
-                'businessTypes' => $availableBusinessTypes,
-            ],
+                'last_page' => $paginator->lastPage()
+            ]
         ]);
     }
 
@@ -102,6 +100,24 @@ class PublicBusinessController extends Controller
     {
         // Support both 'query' and 'keyword' for search
         $search = $request->input('keyword') ?: $request->input('query');
+
+        // Filter by approved status (only apply if isApproved=true is explicitly set)
+        if ($request->has('isApproved') && filter_var($request->input('isApproved'), FILTER_VALIDATE_BOOLEAN)) {
+            $query->whereIn('status', ['active', 'approved']);
+        }
+
+        // Filter by open now based on working hours
+        if ($request->has('isOpenNow') && filter_var($request->input('isOpenNow'), FILTER_VALIDATE_BOOLEAN)) {
+            $now = now();
+            $dayOfWeek = strtolower($now->format('l'));
+            $currentTime = $now->format('H:i:s');
+            
+            $query->whereHas('profile', function($q) use ($dayOfWeek, $currentTime) {
+                $q->whereJsonContains('working_hours->' . $dayOfWeek . '->is_open', true)
+                  ->where('working_hours->' . $dayOfWeek . '->opening_time', '<=', $currentTime)
+                  ->where('working_hours->' . $dayOfWeek . '->closing_time', '>=', $currentTime);
+            });
+        }
 
         if ($search) {
             $query->where(function (Builder $builder) use ($search) {
@@ -163,7 +179,9 @@ class PublicBusinessController extends Controller
             $query->whereHas('profile', function (Builder $profileQuery) use ($serviceDistance) {
                 $profileQuery->where(function (Builder $nested) use ($serviceDistance) {
                     $nested->whereNull('service_distance')
-                        ->orWhere('service_distance', '<=', $serviceDistance);
+                        ->orWhere(function($q) use ($serviceDistance) {
+                            $q->whereRaw("CAST(REPLACE(service_distance, 'km', '') AS DECIMAL(10,2)) <= ?", [$serviceDistance]);
+                        });
                 });
             });
         }
@@ -182,14 +200,26 @@ class PublicBusinessController extends Controller
     {
         $sort = $request->input('sort', 'relevance');
 
-        return match ($sort) {
-            'relevance' => $query->orderByDesc('rating_average')->orderByDesc('rating_count'),
-            'rating' => $query->orderByDesc('rating_average')->orderByDesc('rating_count'),
-            'reviews' => $query->orderByDesc('rating_count')->orderByDesc('rating_average'),
-            'newest' => $query->latest('suppliers.created_at'),
-            'name' => $query->orderBy('suppliers.name'),
-            'distance' => $query->orderByRaw('COALESCE((select service_distance from supplier_profiles where supplier_profiles.supplier_id = suppliers.id), 999999)'),
-            default => $query->orderByDesc('rating_average')->orderByDesc('rating_count'),
-        };
+        switch ($sort) {
+            case 'rating':
+                // Sort by highest rating (descending)
+                return $query->orderByDesc('rating_average')
+                    ->orderByDesc('rating_count');
+
+            case 'distance':
+                // Sort by nearest distance (ascending)
+                return $query->orderByRaw('CAST(REPLACE((select service_distance from supplier_profiles where supplier_profiles.supplier_id = suppliers.id), \'km\', \'\') AS DECIMAL(10,2)) ASC')
+                    ->orderBy('suppliers.name');
+
+            case 'reviews':
+                // Sort by most reviews (descending)
+                return $query->orderByDesc('rating_count')
+                    ->orderByDesc('rating_average');
+
+            case 'name':
+                // Sort alphabetically by business name
+                default:
+                return $query->orderByRaw('(SELECT business_name FROM supplier_profiles WHERE supplier_profiles.supplier_id = suppliers.id)');
+        }
     }
 }
