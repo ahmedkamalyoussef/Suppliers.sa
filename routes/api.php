@@ -49,8 +49,12 @@ Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
 */
 Route::prefix('auth')->group(function () {
     Route::post('/login', [AuthController::class, 'login']);
+    Route::post('/logout', [AuthController::class, 'logout'])->middleware('auth:sanctum');
     Route::post('/send-otp', [AuthController::class, 'sendOtp']);
     Route::post('/verify-otp', [AuthController::class, 'verifyOtp']);
+    // Get user's profile picture (authenticated user or by ID)
+    Route::get('/profile/picture/{id?}', [AuthController::class, 'getProfilePicture'])
+        ->where('id', '[0-9]+');
     Route::post('/forgot-password', [PasswordController::class, 'forgotPassword']);
     Route::post('/reset-password', [PasswordController::class, 'resetPassword']);
 });
@@ -166,6 +170,25 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/dashboard', [SupplierDashboardController::class, 'overview']);
         Route::get('/dashboard/analytics', [SupplierDashboardController::class, 'analytics']);
         Route::get('/profile', [SupplierAuthController::class, 'getProfile']);
+        
+        // Supplier to Supplier Inquiries (New)
+        Route::prefix('supplier-inquiries')->group(function () {
+            Route::get('/', [\App\Http\Controllers\Api\Supplier\SupplierToSupplierInquiryController::class, 'index']);
+            Route::post('/', [\App\Http\Controllers\Api\Supplier\SupplierToSupplierInquiryController::class, 'store']);
+            Route::get('/unread-count', [\App\Http\Controllers\Api\Supplier\SupplierToSupplierInquiryController::class, 'unreadCount']);
+            Route::get('/{inquiry}', [\App\Http\Controllers\Api\Supplier\SupplierToSupplierInquiryController::class, 'show']);
+            Route::post('/{inquiry}/reply', [\App\Http\Controllers\Api\Supplier\SupplierToSupplierInquiryController::class, 'reply']);
+            Route::post('/{id}/read', [\App\Http\Controllers\Api\Supplier\SupplierToSupplierInquiryController::class, 'markAsRead']);
+        });
+        
+        // Regular Inquiries (Old)
+        Route::prefix('inquiries')->group(function () {
+            Route::get('/', [SupplierInquiryController::class, 'index']);
+            Route::post('/', [SupplierInquiryController::class, 'store']);
+            Route::get('/unread-count', [SupplierInquiryController::class, 'unreadCount']);
+            Route::get('/{inquiry}', [SupplierInquiryController::class, 'show']);
+            Route::post('/{inquiry}/reply', [SupplierInquiryController::class, 'reply']);
+        });
         Route::put('/profile', [SupplierAuthController::class, 'updateProfile']);
         
         // Product Images
@@ -228,13 +251,14 @@ Route::middleware('auth:sanctum')->group(function () {
         // Content reports
         Route::get('/reports', [SupplierContentReportController::class, 'index']);
         Route::post('/reports', [SupplierContentReportController::class, 'store']);
+        
         // Inquiries
-        Route::get('/inquiries', [SupplierInquiryController::class, 'index']);
-        Route::get('/inquiries/{inquiry}', [SupplierInquiryController::class, 'show']);
-        Route::post('/inquiries/{inquiry}/reply', [SupplierInquiryController::class, 'reply']);
-        Route::post('/inquiries/{inquiry}/mark-read', [SupplierInquiryController::class, 'markRead']);
-        Route::post('/inquiries/{inquiry}/status', [SupplierInquiryController::class, 'updateStatus']);
+        
     });
+    Route::get('/inquiries', [SupplierInquiryController::class, 'index']);
+    Route::get('/inquiries/{inquiry}', [SupplierInquiryController::class, 'show']);
+    Route::post('/inquiries/{inquiry}/reply', [SupplierInquiryController::class, 'reply']);
+    Route::get('/inquiries/unread/count', [SupplierInquiryController::class, 'unreadCount']);
 
     // Branch Management (Supplier Only)
     Route::prefix('branches')->group(function () {

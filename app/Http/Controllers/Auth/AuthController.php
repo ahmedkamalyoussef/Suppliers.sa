@@ -9,6 +9,7 @@ use App\Models\Otp;
 use App\Models\Supplier;
 use App\Notifications\OtpNotification;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
 use Laravel\Sanctum\PersonalAccessToken;
@@ -187,6 +188,48 @@ class AuthController extends Controller
             $payloadKey => $payloadValue,
             'accessToken' => $token,
             'tokenType' => 'Bearer',
+        ]);
+    }
+
+    /**
+     * Get a user's profile picture by user ID
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @param  int  $id
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function getProfilePicture(Request $request, $id = null)
+    {
+        // If no ID is provided, get the authenticated user's ID
+        $userId = $id ?? $request->user()?->id;
+        
+        if (!$userId) {
+            return response()->json(['message' => 'User ID is required'], 400);
+        }
+
+        // Try to find the user in both admin and supplier tables
+        $user = Admin::find($userId) ?? Supplier::find($userId);
+        
+        if (!$user) {
+            return response()->json(['message' => 'User not found'], 404);
+        }
+
+        // Get the profile image path
+        $profileImage = $user->profile_image;
+        
+        // Get the media URL using the parent class method
+        $imageUrl = $this->mediaUrl($profileImage);
+        
+        if (empty($imageUrl)) {
+            return response()->json([
+                'message' => 'No profile picture found for this user',
+                'profile_image' => null
+            ], 404);
+        }
+        
+        return response()->json([
+            'message' => 'Profile picture retrieved successfully',
+            'profile_image' => $imageUrl
         ]);
     }
 }
