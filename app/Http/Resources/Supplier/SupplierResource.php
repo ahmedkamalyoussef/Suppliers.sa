@@ -41,8 +41,8 @@ class SupplierResource extends JsonResource
                 'slug' => $profile->slug,
                 'businessName' => $profile->business_name,
                 'businessType' => $profile->business_type,
-                'category' => $profile->business_categories[0] ?? null,
-                'categories' => $profile->business_categories ?? [],
+                'category' => $profile->category, // Main category (single value)
+                'categories' => $profile->business_categories ?? [], // Array of categories
                 'description' => $profile->description,
                 'services' => $profile->services_offered ?? [],
                 'website' => $profile->website,

@@ -199,19 +199,19 @@ class SupplierAuthController extends Controller
         }
 
         // Validation & normalization are handled by UpdateSupplierProfileRequest
-
+        
+        // Handle supplier's name (for authentication/display)
         if ($request->filled('name')) {
             $supplier->name = $request->name;
-        } elseif ($request->filled('businessName')) {
-            $supplier->name = $request->businessName;
         }
 
         if ($request->filled('contactPhone')) {
             $supplier->phone = $request->contactPhone;
         }
 
+        // Handle contact email in profile instead of supplier's main email
         if ($request->filled('contactEmail')) {
-            $supplier->email = $request->contactEmail;
+            $profileData['contact_email'] = $request->contactEmail;
         }
 
         $supplier->save();

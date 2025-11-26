@@ -23,16 +23,16 @@ class SupplierProfileService
             $profileData['business_type'] = $request->businessType;
         }
 
+        // Handle category (independent field)
         if ($request->has('category')) {
             $profileData['category'] = $request->category;
         }
-
-        if ($request->has('categories') || $request->has('category')) {
-            $categories = $request->input('categories', []);
-            if (! $categories && $request->filled('category')) {
-                $categories = [$request->category];
-            }
-            $profileData['business_categories'] = $categories;
+        
+        // Handle categories (completely independent from category)
+        if ($request->has('categories')) {
+            $profileData['business_categories'] = is_array($request->categories) 
+                ? $request->categories 
+                : [$request->categories];
         }
 
         if ($request->has('services')) {
