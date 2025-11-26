@@ -9,6 +9,7 @@ use App\Models\Supplier;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use App\Http\Resources\Public\BranchResource;
+use App\Models\SupplierProfile;
 
 class PublicBusinessController extends Controller
 {
@@ -25,14 +26,15 @@ class PublicBusinessController extends Controller
         $startOfWeek = $now->copy()->startOfWeek();
 
         // statuses
-        $validStatuses = ['active', 'approved', 'pending'];
+        $validStatuses = ['active', 'approved'];
 
         // All suppliers
         $suppliers = Supplier::whereIn('status', $validStatuses)
             ->with(['profile', 'branches'])
             ->get();
 
-        $totalBusinesses = $suppliers->count();
+        $totalBusinesses = SupplierProfile::count();
+        $totalSuppliers = Supplier::whereIn('status', $validStatuses)->count();
         $openNowCount = 0;
 
         foreach ($suppliers as $supplier) {
@@ -70,19 +72,18 @@ class PublicBusinessController extends Controller
         }
 
         // Count new this week
-        $newThisWeekCount = Supplier::whereIn('status', $validStatuses)
-            ->where('created_at', '>=', $startOfWeek)
+        $newThisWeekCount = Supplier::where('created_at', '>=', $startOfWeek)
             ->count();
 
         $response = [
             'total_businesses' => $totalBusinesses,
-            'total_suppliers' => $totalBusinesses,
+            'total_suppliers' => $totalSuppliers,
             'open_now' => $openNowCount,
             'new_this_week' => $newThisWeekCount,
         ];
         
         return response()->json($response);
-}
+    }
 
 /* ------------------------------------------
 |  CHECK IF SUPPLIER OR ANY BRANCH IS OPEN
@@ -225,9 +226,10 @@ private function isOpenNow($hours, string $day, string $now)
             $currentTime = $now->format('H:i:s');
             
             $query->whereHas('profile', function($q) use ($dayOfWeek, $currentTime) {
-                $q->whereJsonContains('working_hours->' . $dayOfWeek . '->is_open', true)
-                  ->where('working_hours->' . $dayOfWeek . '->opening_time', '<=', $currentTime)
-                  ->where('working_hours->' . $dayOfWeek . '->closing_time', '>=', $currentTime);
+                $q->whereJsonLength('working_hours->' . $dayOfWeek, '>', 0)
+                  ->where('working_hours->' . $dayOfWeek . '->closed', false)
+                  ->where('working_hours->' . $dayOfWeek . '->open', '<=', $currentTime)
+                  ->where('working_hours->' . $dayOfWeek . '->close', '>=', $currentTime);
             });
         }
 
@@ -239,7 +241,11 @@ private function isOpenNow($hours, string $day, string $now)
                         $profileQuery->where('business_name', 'like', "%{$search}%")
                             ->orWhere('description', 'like', "%{$search}%")
                             ->orWhereJsonContains('keywords', $search)
-                            ->orWhereJsonContains('services_offered', $search);
+                            ->orWhere(function($q) use ($search) {
+                                $searchTerm = strtolower($search);
+                                $q->whereRaw('LOWER(JSON_SEARCH(services_offered, "one", ?)) IS NOT NULL', ["%$searchTerm%"])
+                                  ->orWhereRaw('LOWER(JSON_SEARCH(services_offered, "one", ?)) IS NOT NULL', ["%" . ucfirst($searchTerm) . "%"]);
+                            });
                     })
                     ->orWhereHas('products', function (Builder $productQuery) use ($search) {
                         $productQuery->where('product_name', 'like', "%{$search}%");
