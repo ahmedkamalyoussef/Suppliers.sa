@@ -70,6 +70,7 @@ Route::prefix('public')->group(function () {
     
     // Business endpoints
     Route::get('/businesses', [PublicBusinessController::class, 'index']);
+    Route::post('/businesses/ai-search', [PublicBusinessController::class, 'aiSearch']);
     Route::get('/businesses/{slug}', [PublicBusinessController::class, 'show']);
     Route::get('/businesses/{slug}/reviews', [PublicBusinessReviewController::class, 'index']);
     Route::post('/businesses/{slug}/reviews', [PublicBusinessReviewController::class, 'store']);

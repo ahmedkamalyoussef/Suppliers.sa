@@ -1,0 +1,281 @@
+<?php
+
+namespace App\Services;
+
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
+
+class AISearchService
+{
+    protected $apiKey;
+
+    public function __construct()
+    {
+        $this->apiKey = env('GEMINI_API_KEY');
+        // تأكد أن مفتاح API موجود في ملف .env
+        if (!$this->apiKey) {
+            throw new \Exception("GEMINI_API_KEY is not set in environment variables.");
+        }
+    }
+
+    /**
+     * يحلل استفسار المستخدم ويحوله إلى مصفوفة فلاتر يمكن تطبيقها على الاستعلام.
+     *
+     * @param string $query استفسار المستخدم باللغة الطبيعية.
+     * @return array مصفوفة تحتوي على الفلاتر المستخرجة.
+     */
+    public function analyzeQuery(string $query): array
+    {
+        // استخدام موديل Gemini للدقة في تحليل النصوص
+        $url = "https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key={$this->apiKey}";
+
+        // قمنا بتحديث الـ Prompt لتعريف حقول البحث كلها (منتجات، شهادات، تقييمات) لـ AI
+        $prompt = <<<PROMPT
+You are an intelligent search assistant. Analyze the user's query and return search filters in JSON based on the business data schema:
+
+Searchable Fields Across All Tables:
+- Supplier Name
+- Profile: business_name, description, category, services_offered, keywords.
+- Products: product_name.
+- Services: service_name.
+- Certifications: certification_name.
+- Branches: address, special_services.
+- Ratings: score (used for minRating).
+
+User Query: "$query"
+
+Expected JSON format:
+{
+  "filters": {
+    "keyword": "string|null",
+    "minRating": "integer|null",
+    "location": "string|null",
+    "category": "string|null",
+        try {
+            Log::info('AI Search: Analyzing query with Prism', ['query' => $query]);
+
+            // Use Prism with Groq
+            $response = Prism::text()
+                ->using('groq', 'llama-3.1-70b-versatile')
+                ->withPrompt($this->buildPrompt($query))
+                ->asStructuredObject()
+                ->withSchema([
+                    'type' => 'object',
+                    'properties' => [
+                        'filters' => [
+                            'type' => 'object',
+                            'properties' => [
+                                'keyword' => ['type' => 'string'],
+                                'minRating' => ['type' => 'number'],
+                                'maxRating' => ['type' => 'number'],
+                                'location' => ['type' => 'string'],
+                                'category' => ['type' => 'string'],
+                                'isOpenNow' => ['type' => 'boolean']
+                            ]
+                        ]
+                    ]
+                ])
+                ->generate();
+
+            Log::info('AI Search: Prism response received', ['response' => $response->text]);
+
+            $result = json_decode($response->text, true);
+            
+            if (!$result) {
+                Log::error('AI Search: Invalid JSON from Prism', ['text' => $response->text]);
+                return $this->parseQueryManually($query);
+            }
+
+            return $result;
+
+        } catch (\Exception $e) {
+            Log::error('AI Search: Prism Error', [
+                'query' => $query,
+                'error' => $e->getMessage()
+            ]);
+            
+            return $this->parseQueryManually($query);
+        }
+    }
+
+    private function buildPrompt(string $query): string
+    {
+        return "You are a smart business search assistant. Analyze the user's query and extract search filters.
+
+Available filters:
+- keyword: general search term for business name, description, or services
+- minRating: minimum rating (number from 1-5)
+- maxRating: maximum rating (number from 1-5) 
+- location: city or area name
+- category: business type (Furniture, Automobile, Electronics, IT, Consulting, Retail, Store, Supplier, Individual)
+- isOpenNow: whether business should be currently open
+
+User query: \"{$query}\"
+
+Return JSON with filters object. Only include filters that are explicitly mentioned. Handle mixed languages (Arabic, English, Spanish).";
+    }
+
+    /**
+     * Manual fallback parsing for common queries
+     */
+    private function parseQueryManually(string $query): array
+    {
+        $filters = [];
+        
+        // Extract rating requirements - more comprehensive patterns (English + Arabic) - Conversational
+        if (preg_match('/rating\s+(?:greater|more|above|over)\s+than\s+(\d+(?:\.\d+)?)/i', $query, $matches)) {
+            $filters['minRating'] = (int) $matches[1];
+            Log::info('Manual parsing: extracted rating', ['rating' => $filters['minRating']]);
+        } elseif (preg_match('/rating\s+(?:greater|more|above|over)\s+(\d+(?:\.\d+)?)/i', $query, $matches)) {
+            $filters['minRating'] = (int) $matches[1];
+            Log::info('Manual parsing: extracted rating (without than)', ['rating' => $filters['minRating']]);
+        } elseif (preg_match('/(?:with|has|have)\s+(?:a\s+)?rating\s+(?:of|at\s+least)\s+(\d+(?:\.\d+)?)/i', $query, $matches)) {
+            $filters['minRating'] = (int) $matches[1];
+            Log::info('Manual parsing: extracted rating (with pattern)', ['rating' => $filters['minRating']]);
+        } 
+        // Conversational English patterns
+        elseif (preg_match('/(?:show|find|get|give me|search)\s+(?:me\s+)?(?:businesses|suppliers|stores)\s+(?:with|that have|having)\s+(?:a\s+)?rating\s+(?:of|at least|above|over)\s+(\d+(?:\.\d+)?)/i', $query, $matches)) {
+            $filters['minRating'] = (int) $matches[1];
+            Log::info('Manual parsing: extracted rating (conversational)', ['rating' => $filters['minRating']]);
+        } elseif (preg_match('/(?:i want|i need|i am looking for|looking for)\s+(?:businesses|suppliers|stores)\s+(?:with|that have)\s+(?:a\s+)?rating\s+(?:of|at least|above|over)\s+(\d+(?:\.\d+)?)/i', $query, $matches)) {
+            $filters['minRating'] = (int) $matches[1];
+            Log::info('Manual parsing: extracted rating (i want pattern)', ['rating' => $filters['minRating']]);
+        }
+        // Arabic patterns for rating - Conversational
+        elseif (preg_match('/(?:تقييم|تقيم|ريتينج)\s+(?:أكبر|أعلى|اكبر|اعلى|زيد|زائد|أكثر|اكثر)\s+(?:من|عن)\s+(\d+(?:\.\d+)?)/i', $query, $matches)) {
+            $filters['minRating'] = (int) $matches[1];
+            Log::info('Manual parsing: extracted Arabic rating', ['rating' => $filters['minRating']]);
+        } elseif (preg_match('/(?:عنده|لديه|موجود)\s+(\d+(?:\.\d+)?)\s+(?:تقييم|تقيم|ريتينج)/i', $query, $matches)) {
+            $filters['minRating'] = (int) $matches[1];
+            Log::info('Manual parsing: extracted Arabic rating (has pattern)', ['rating' => $filters['minRating']]);
+        } elseif (preg_match('/(?:عنده|لديه)\s+(?:أكثر|اكثر|زيد)\s+(?:من|عن)\s+(\d+(?:\.\d+)?)\s+(?:تقييم|تقيم|مقيم|مقيمه)/i', $query, $matches)) {
+            $filters['minRating'] = (int) $matches[1];
+            Log::info('Manual parsing: extracted Arabic rating (more than pattern)', ['rating' => $filters['minRating']]);
+        } elseif (preg_match('/(?:عنده|لديه)\s+(?:أكثر|اكثر|زيد)\s+(?:من|عن)\s+(\d+(?:\.\d+)?)\s+(?:تقييم|تقيم)/i', $query, $matches)) {
+            $filters['minRating'] = (int) $matches[1];
+            Log::info('Manual parsing: extracted Arabic rating (simple pattern)', ['rating' => $filters['minRating']]);
+        }
+        // Conversational Arabic patterns
+        elseif (preg_match('/(?:عايز|ابغى|اريد|محتاج)\s+(?:محل|متجر|شركة|ورشة)\s+(?:عنده|لديه)\s+(?:تقييم|تقيم|مقيم|مقيمه)\s+(?:أكبر|أعلى|اكبر|اعلى|أكثر|اكثر)\s+(?:من|عن)\s+(\d+(?:\.\d+)?)/i', $query, $matches)) {
+            $filters['minRating'] = (int) $matches[1];
+            Log::info('Manual parsing: extracted Arabic rating (want pattern)', ['rating' => $filters['minRating']]);
+        } elseif (preg_match('/(?:ابحث عن|دورلي|جبلي)\s+(?:على\s+)?(?:محل|متجر|شركة)\s+(?:عنده|لديه)\s+(?:تقييم|تقيم|مقيم|مقيمه)\s+(\d+(?:\.\d+)?)/i', $query, $matches)) {
+            $filters['minRating'] = (int) $matches[1];
+            Log::info('Manual parsing: extracted Arabic rating (search pattern)', ['rating' => $filters['minRating']]);
+        } 
+        // Simple conversational patterns
+        elseif (preg_match('/(?:حد|عندي|عنده|لدي)\s+(?:أكثر|اكتر|زيد)\s+(?:من|عن)\s+(\d+(?:\.\d+)?)\s+(?:تقييم|تقيم|مقيم|مقيمه)/i', $query, $matches)) {
+            $filters['minRating'] = (int) $matches[1];
+            Log::info('Manual parsing: extracted Arabic rating (simple pattern)', ['rating' => $filters['minRating']]);
+        }
+        
+        // Extract location - more comprehensive patterns (Conversational)
+        if (preg_match('/(?:in|at|from)\s+([A-Za-z\s]+?)(?:\s+(?:with|and|or|$))/i', $query, $matches)) {
+            $location = trim($matches[1]);
+            // Don't treat category keywords as locations
+            $categoryKeywords = ['furniture', 'automobile', 'electronics', 'it', 'technology', 'consulting', 'retail', 'store', 'supplier', 'individual'];
+            if (!in_array(strtolower($location), $categoryKeywords)) {
+                $filters['location'] = $location;
+                Log::info('Manual parsing: extracted location', ['location' => $filters['location']]);
+            }
+        } elseif (preg_match('/([A-Za-z\s]+?)(?:\s+(?:business|store|shop))/i', $query, $matches)) {
+            $location = trim($matches[1]);
+            $categoryKeywords = ['furniture', 'automobile', 'electronics', 'it', 'technology', 'consulting', 'retail', 'store', 'supplier', 'individual'];
+            if (!in_array(strtolower($location), $categoryKeywords)) {
+                $filters['location'] = $location;
+                Log::info('Manual parsing: extracted location (business pattern)', ['location' => $filters['location']]);
+            }
+        }
+        // Conversational location patterns
+        elseif (preg_match('/(?:find|show|get|search)\s+(?:me\s+)?(?:businesses|suppliers|stores)\s+(?:in|at|from)\s+([A-Za-z\s]+)/i', $query, $matches)) {
+            $filters['location'] = trim($matches[1]);
+            Log::info('Manual parsing: extracted conversational location', ['location' => $filters['location']]);
+        }
+        // Arabic location patterns - Conversational
+        elseif (preg_match('/(?:في|في\s+|من)\s+([ا-ي\s]+?)(?:\s+(?:مع|و|او|$))/i', $query, $matches)) {
+            $location = trim($matches[1]);
+            $arabicCategoryKeywords = ['أثاث', 'سيارات', 'كهرباء', 'تكنولوجيا', 'استشارات', 'تجزئة', 'متجر', 'مورد', 'فردي'];
+            if (!in_array($location, $arabicCategoryKeywords)) {
+                $filters['location'] = $location;
+                Log::info('Manual parsing: extracted Arabic location', ['location' => $filters['location']]);
+            }
+        }
+        
+        // Extract category/business type - be more specific to avoid false positives (English + Arabic)
+        $categories = [
+            'furniture' => 'Furniture',
+            'automobile' => 'Automobile', 
+            'electronics' => 'Electronics',
+            'electrical' => 'Electronics',
+            'it' => 'IT',
+            'technology' => 'IT',
+            'consulting' => 'Consulting',
+            'retail' => 'Retail',
+            'store' => 'Store',
+            'supplier' => 'Supplier',
+            'individual' => 'Individual',
+            // Arabic categories
+            'أثاث' => 'Furniture',
+            'اثاث' => 'Furniture',
+            'سيارات' => 'Automobile',
+            'كهرباء' => 'Electronics',
+            'تكنولوجيا' => 'IT',
+            'استشارات' => 'Consulting',
+            'تجزئة' => 'Retail',
+            'متجر' => 'Store',
+            'مورد' => 'Supplier',
+            'فردي' => 'Individual'
+        ];
+        
+        // Check for category mentions
+        foreach ($categories as $keyword => $category) {
+            // Use word boundaries to avoid partial matches
+            if (preg_match('/\b' . preg_quote($keyword, '/') . '\b/i', $query)) {
+                $filters['category'] = $category;
+                Log::info('Manual parsing: extracted category', ['category' => $filters['category']]);
+                goto category_done;
+            }
+        }
+        
+        // Conversational category patterns
+        if (preg_match('/(?:find|show|get|search)\s+(?:me\s+)?(?:businesses|suppliers|stores)\s+(?:that\s+)?(?:sell|offer|provide|specialize in)\s+([A-Za-z\s]+)/i', $query, $matches)) {
+            $categoryText = strtolower(trim($matches[1]));
+            foreach ($categories as $keyword => $category) {
+                if (strpos($categoryText, $keyword) !== false) {
+                    $filters['category'] = $category;
+                    Log::info('Manual parsing: extracted conversational category', ['category' => $filters['category']]);
+                    goto category_done;
+                }
+            }
+        }
+        
+        // Arabic conversational category patterns
+        if (preg_match('/(?:ابحث عن|دورلي|جبلي)\s+(?:محل|متجر|شركة)\s+(?:بيع|يبيع|يوفر|يقدم)\s+([ا-ي\s]+)/i', $query, $matches)) {
+            $categoryText = trim($matches[1]);
+            foreach ($categories as $keyword => $category) {
+                if (strpos($categoryText, $keyword) !== false) {
+                    $filters['category'] = $category;
+                    Log::info('Manual parsing: extracted Arabic conversational category', ['category' => $filters['category']]);
+                    goto category_done;
+                }
+            }
+        }
+        
+        category_done:
+        
+        // Extract open now
+        if (preg_match('/open\s+now/i', $query)) {
+            $filters['isOpenNow'] = true;
+            Log::info('Manual parsing: extracted isOpenNow');
+        }
+        
+        // If no specific filters found, use entire query as keyword
+        if (empty($filters)) {
+            $filters['keyword'] = $query;
+            Log::info('Manual parsing: using as keyword', ['keyword' => $query]);
+        }
+        
+        Log::info('Manual parsing result', ['filters' => $filters]);
+        return ['filters' => $filters];
+    }
+}

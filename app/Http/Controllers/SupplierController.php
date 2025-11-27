@@ -202,7 +202,6 @@ class SupplierController extends Controller
                         'created_at' => $review->created_at->toDateTimeString(),
                         'user' => [
                             'name' => $review->rater->name ?? null,
-                            'avatar' => $review->rater->profile_image ? asset($review->rater->profile_image) : null
                         ]
                     ];
                 })

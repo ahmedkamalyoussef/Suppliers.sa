@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Resources\Supplier\RatingResource;
 use App\Http\Resources\Supplier\SupplierSummaryResource;
 use App\Models\Supplier;
+use App\Services\AISearchService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use App\Http\Resources\Public\BranchResource;
@@ -139,6 +140,11 @@ private function isOpenNow($hours, string $day, string $now)
             $suppliers->where('id', '!=', auth()->id());
         }
 
+        // Handle AI parameter
+        if ($aiPrompt = $request->input('ai')) {
+            $suppliers = $this->applyAIFilters($suppliers, $aiPrompt);
+        }
+
         $suppliers = $this->applyFilters($suppliers, $request);
 
         $suppliers = $this->applySorting($suppliers, $request);
@@ -184,6 +190,61 @@ private function isOpenNow($hours, string $day, string $now)
                 'per_page' => $paginator->perPage(),
                 'total' => $paginator->total(),
                 'last_page' => $paginator->lastPage()
+            ],
+            'ai_info' => [
+                'prompt' => $aiPrompt ?? null,
+                'applied' => !empty($aiPrompt)
+            ]
+        ]);
+    }
+
+    /**
+     * Search businesses using AI (POST method)
+     */
+    public function aiSearch(Request $request)
+    {
+        $request->validate([
+            'prompt' => 'required|string|max:500'
+        ]);
+
+        $aiPrompt = $request->input('prompt');
+        
+        // Use the same logic as the index method but with AI prompt
+        $perPage = (int) $request->input('per_page', 12);
+        $perPage = max(1, min($perPage, 50));
+
+        $suppliers = Supplier::query()
+            ->with(['profile'])
+            ->withAvg('approvedRatings as rating_average', 'score')
+            ->withCount('approvedRatings as rating_count');
+
+        // Always exclude the current supplier's business if they are logged in
+        if (auth()->check()) {
+            $suppliers->where('id', '!=', auth()->id());
+        }
+
+        // Handle AI parameter from body
+        $suppliers = $this->applyAIFilters($suppliers, $aiPrompt);
+
+        $suppliers = $this->applyFilters($suppliers, $request);
+        $suppliers = $this->applySorting($suppliers, $request);
+
+        $paginator = $suppliers->paginate($perPage)->appends($request->query());
+
+        $data = $paginator->getCollection()->map(fn (Supplier $supplier) => (new SupplierSummaryResource($supplier))->toArray(request()));
+
+        return response()->json([
+            'data' => $data,
+            'meta' => [
+                'current_page' => $paginator->currentPage(),
+                'per_page' => $paginator->perPage(),
+                'total' => $paginator->total(),
+                'last_page' => $paginator->lastPage()
+            ],
+            'ai_info' => [
+                'prompt' => $aiPrompt,
+                'applied' => true,
+                'method' => 'POST'
             ]
         ]);
     }
@@ -206,6 +267,53 @@ private function isOpenNow($hours, string $day, string $now)
             'reviews' => $supplier->approvedRatings->map(fn ($rating) => (new RatingResource($rating))->toArray(request()))->toArray(),
             'branches' => $supplier->branches->map(fn ($branch) => (new BranchResource($branch))->toArray(request()))->toArray(),
         ]);
+    }
+
+    private function applyAIFilters(Builder $query, string $aiPrompt): Builder
+    {
+        try {
+            \Log::info('Applying AI search', ['prompt' => $aiPrompt]);
+            
+            $aiService = new AISearchService();
+            $aiResult = $aiService->analyzeQuery($aiPrompt);
+            
+            \Log::info('AI result received', ['result' => $aiResult]);
+            
+            if (isset($aiResult['query'])) {
+                $searchQuery = $aiResult['query'];
+                
+                \Log::info('Applying AI query search', ['query' => $searchQuery]);
+                
+                // Search across all tables with the AI processed query
+                $query->where(function (Builder $builder) use ($searchQuery) {
+                    $builder->where('suppliers.name', 'like', "%{$searchQuery}%")
+                        ->orWhereHas('profile', function (Builder $profileQuery) use ($searchQuery) {
+                            $profileQuery->where('business_name', 'like', "%{$searchQuery}%")
+                                ->orWhere('description', 'like', "%{$searchQuery}%")
+                                ->orWhere('business_address', 'like', "%{$searchQuery}%")
+                                ->orWhereJsonContains('keywords', $searchQuery)
+                                ->orWhereJsonContains('business_categories', $searchQuery)
+                                ->orWhere('business_type', 'like', "%{$searchQuery}%");
+                        })
+                        ->orWhereHas('services', function (Builder $servicesQuery) use ($searchQuery) {
+                            $servicesQuery->where('service_name', 'like', "%{$searchQuery}%");
+                        })
+                        ->orWhereHas('products', function (Builder $productsQuery) use ($searchQuery) {
+                            $productsQuery->where('product_name', 'like', "%{$searchQuery}%");
+                        });
+                });
+            }
+            
+            return $query;
+            
+        } catch (\Exception $e) {
+            \Log::error('AI Filters Exception', [
+                'prompt' => $aiPrompt,
+                'error' => $e->getMessage()
+            ]);
+            
+            return $query;
+        }
     }
 
     private function applyFilters(Builder $query, Request $request): Builder
