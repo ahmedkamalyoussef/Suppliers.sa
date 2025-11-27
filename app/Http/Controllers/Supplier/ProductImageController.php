@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Supplier;
 
 use App\Http\Controllers\Controller;
+use App\Models\Supplier;
 use App\Models\SupplierProductImage;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\File;
@@ -54,17 +55,16 @@ class ProductImageController extends BaseSupplierController
     {
         $this->authorize('delete', $image);
         
-        // Delete the file from public directory
-        $path = parse_url($image->image_url, PHP_URL_PATH);
-        $path = ltrim($path, '/'); // Remove leading slash
-        
-        if (File::exists(public_path($path))) {
-            File::delete(public_path($path));
+        // Delete file
+        $path = public_path(str_replace(url('/'), '', $image->image_url));
+        if (file_exists($path)) {
+            unlink($path);
         }
         
+        // Delete from database
         $image->delete();
         
-        return response()->json(null, 204);
+        return response()->json(['message' => 'Image deleted']);
     }
 
     public function reorder(Request $request)

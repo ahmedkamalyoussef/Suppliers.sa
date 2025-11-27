@@ -17,6 +17,7 @@ use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Laravel\Sanctum\PersonalAccessToken;
+use App\Http\Requests\Auth\UpdateSupplierPreferencesRequest;
 
 
 class SupplierAuthController extends Controller
@@ -370,5 +371,159 @@ class SupplierAuthController extends Controller
         }
 
         return $slug;
+    }
+
+    /**
+     * Get supplier preferences
+     */
+    public function getPreferences(Request $request)
+    {
+        $supplier = $request->user();
+        
+        if (! ($supplier instanceof Supplier)) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
+        // Load profile to get business name
+        $supplier->load('profile');
+
+        return response()->json([
+            'supplierName' => $supplier->name,
+            'businessName' => $supplier->profile?->business_name,
+            'email' => $supplier->email,
+            'phone' => $supplier->phone,
+            'preferences' => [
+                // Notification Preferences
+                'emailNotifications' => (bool) $supplier->email_notifications,
+                'smsNotifications' => (bool) $supplier->sms_notifications,
+                'newInquiriesNotifications' => (bool) $supplier->new_inquiries_notifications,
+                'profileViewsNotifications' => (bool) $supplier->profile_views_notifications,
+                'weeklyReports' => (bool) $supplier->weekly_reports,
+                'marketingEmails' => (bool) $supplier->marketing_emails,
+                
+                // Security Preferences
+                'profileVisibility' => $supplier->profile_visibility ?? 'public',
+                'showEmailPublicly' => (bool) $supplier->show_email_publicly,
+                'showPhonePublicly' => (bool) $supplier->show_phone_publicly,
+                'allowDirectContact' => (bool) $supplier->allow_direct_contact,
+                'allowSearchEngineIndexing' => (bool) $supplier->allow_search_engine_indexing,
+            ]
+        ]);
+    }
+
+    /**
+     * Update supplier preferences
+     */
+    public function updatePreferences(UpdateSupplierPreferencesRequest $request)
+    {
+        $supplier = $request->user();
+        
+        if (! ($supplier instanceof Supplier)) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
+        // Update profile fields
+        if ($request->filled('name')) {
+            $supplier->name = $request->name;
+        }
+        
+        if ($request->filled('email')) {
+            $supplier->email = $request->email;
+        }
+        
+        if ($request->filled('phone')) {
+            $supplier->phone = $request->phone;
+        }
+        
+        // Update business name in profile
+        if ($request->filled('businessName')) {
+            $profile = $supplier->profile ?: new SupplierProfile(['supplier_id' => $supplier->id]);
+            $profile->business_name = $request->businessName;
+            $profile->save();
+        }
+
+        // Update Notification Preferences
+        $supplier->email_notifications = $request->input('emailNotifications', $supplier->email_notifications);
+        $supplier->sms_notifications = $request->input('smsNotifications', $supplier->sms_notifications);
+        $supplier->new_inquiries_notifications = $request->input('newInquiriesNotifications', $supplier->new_inquiries_notifications);
+        $supplier->profile_views_notifications = $request->input('profileViewsNotifications', $supplier->profile_views_notifications);
+        $supplier->weekly_reports = $request->input('weeklyReports', $supplier->weekly_reports);
+        $supplier->marketing_emails = $request->input('marketingEmails', $supplier->marketing_emails);
+
+        // Update Security Preferences
+        $supplier->profile_visibility = $request->input('profileVisibility', $supplier->profile_visibility ?? 'public');
+        $supplier->show_email_publicly = $request->input('showEmailPublicly', $supplier->show_email_publicly);
+        $supplier->show_phone_publicly = $request->input('showPhonePublicly', $supplier->show_phone_publicly);
+        $supplier->allow_direct_contact = $request->input('allowDirectContact', $supplier->allow_direct_contact);
+        $supplier->allow_search_engine_indexing = $request->input('allowSearchEngineIndexing', $supplier->allow_search_engine_indexing);
+        
+        // Save all changes
+        $supplier->save();
+        
+        // Return updated profile and preferences
+        return response()->json([
+            'message' => 'Profile and preferences updated successfully',
+            'data' => [
+                'name' => $supplier->name,
+                'email' => $supplier->email,
+                'phone' => $supplier->phone,
+                'businessName' => $supplier->profile ? $supplier->profile->business_name : null,
+                'emailNotifications' => (bool) $supplier->email_notifications,
+                'smsNotifications' => (bool) $supplier->sms_notifications,
+                'newInquiriesNotifications' => (bool) $supplier->new_inquiries_notifications,
+                'profileViewsNotifications' => (bool) $supplier->profile_views_notifications,
+                'weeklyReports' => (bool) $supplier->weekly_reports,
+                'marketingEmails' => (bool) $supplier->marketing_emails,
+                'profileVisibility' => $supplier->profile_visibility,
+                'showEmailPublicly' => (bool) $supplier->show_email_publicly,
+                'showPhonePublicly' => (bool) $supplier->show_phone_publicly,
+                'allowDirectContact' => (bool) $supplier->allow_direct_contact,
+                'allowSearchEngineIndexing' => (bool) $supplier->allow_search_engine_indexing
+            ]
+        ]);
+    }
+
+    public function deleteAccount(Request $request)
+    {
+        $request->validate([
+            'password' => ['required', 'string'],
+            'confirmation' => ['required', 'string', 'in:DELETE'],
+        ]);
+
+        $supplier = $request->user();
+        
+        if (! ($supplier instanceof Supplier)) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
+        // Verify password for security
+        if (! Hash::check($request->password, $supplier->password)) {
+            return response()->json(['message' => 'Invalid password'], 401);
+        }
+
+        // Delete profile image if exists
+        if ($supplier->profile_image) {
+            $imagePath = public_path(str_replace(url('/'), '', $supplier->profile_image));
+            if (file_exists($imagePath)) {
+                unlink($imagePath);
+            }
+        }
+
+        // Delete related data (cascade delete should handle most of this)
+        $supplier->productImages()->each(function ($image) {
+            $path = public_path(str_replace(url('/'), '', $image->image_url));
+            if (file_exists($path)) {
+                unlink($path);
+            }
+            $image->delete();
+        });
+
+        // Delete all tokens (logout from all devices)
+        $supplier->tokens()->delete();
+
+        // Delete the supplier (this will cascade delete related records)
+        $supplier->delete();
+
+        return response()->json(['message' => 'Account deleted successfully']);
     }
 }

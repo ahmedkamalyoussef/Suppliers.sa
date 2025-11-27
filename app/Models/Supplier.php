@@ -22,6 +22,19 @@ class Supplier extends Authenticatable
         'status',
         'last_seen_at',
         'role',
+        // Notification Preferences
+        'email_notifications',
+        'sms_notifications',
+        'new_inquiries_notifications',
+        'profile_views_notifications',
+        'weekly_reports',
+        'marketing_emails',
+        // Security Preferences
+        'profile_visibility',
+        'show_email_publicly',
+        'show_phone_publicly',
+        'allow_direct_contact',
+        'allow_search_engine_indexing',
     ];
 
     protected $hidden = [
@@ -32,6 +45,18 @@ class Supplier extends Authenticatable
     protected $casts = [
         'email_verified_at' => 'datetime',
         'last_seen_at' => 'datetime',
+        // Notification Preferences
+        'email_notifications' => 'boolean',
+        'sms_notifications' => 'boolean',
+        'new_inquiries_notifications' => 'boolean',
+        'profile_views_notifications' => 'boolean',
+        'weekly_reports' => 'boolean',
+        'marketing_emails' => 'boolean',
+        // Security Preferences
+        'show_email_publicly' => 'boolean',
+        'show_phone_publicly' => 'boolean',
+        'allow_direct_contact' => 'boolean',
+        'allow_search_engine_indexing' => 'boolean',
     ];
 
     public function profile()
@@ -67,6 +92,16 @@ class Supplier extends Authenticatable
     public function inquiries()
     {
         return $this->hasMany(SupplierInquiry::class);
+    }
+
+    public function receivedSupplierInquiries()
+    {
+        return $this->hasMany(\App\Models\SupplierToSupplierInquiry::class, 'receiver_supplier_id');
+    }
+
+    public function sentSupplierInquiries()
+    {
+        return $this->hasMany(\App\Models\SupplierToSupplierInquiry::class, 'sender_supplier_id');
     }
 
     public function documents()

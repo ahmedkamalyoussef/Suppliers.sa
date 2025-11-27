@@ -170,6 +170,10 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/dashboard', [SupplierDashboardController::class, 'overview']);
         Route::get('/dashboard/analytics', [SupplierDashboardController::class, 'analytics']);
         Route::get('/profile', [SupplierAuthController::class, 'getProfile']);
+        Route::delete('/account', [SupplierAuthController::class, 'deleteAccount']);
+        
+        // Public supplier profile view
+        Route::get('/{supplier}/view', [\App\Http\Controllers\Supplier\SupplierViewController::class, 'view']);
         
         // Supplier to Supplier Inquiries (New)
         Route::prefix('supplier-inquiries')->group(function () {
@@ -192,7 +196,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::put('/profile', [SupplierAuthController::class, 'updateProfile']);
         
         // Product Images
-        Route::apiResource('product-images', ProductImageController::class)->except(['update']);
+        Route::apiResource('product-images', ProductImageController::class)->except(['update', 'destroy']);
         
         // Products
         Route::apiResource('products', SupplierProductController::class);
@@ -218,6 +222,10 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::delete('/certifications/{certification}', [CertificationController::class, 'destroy']);
         Route::post('/certifications/reorder', [CertificationController::class, 'reorder']);
         Route::patch('/profile', [SupplierAuthController::class, 'updateProfilePartial']);
+        
+        // Supplier Preferences
+        Route::get('/preferences', [SupplierAuthController::class, 'getPreferences']);
+        Route::put('/preferences', [SupplierAuthController::class, 'updatePreferences']);
         
         // Profile and Business Images
         Route::post('/profile/image', 'App\Http\Controllers\Supplier\SupplierProfileImageController@update');

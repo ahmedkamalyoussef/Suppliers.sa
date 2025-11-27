@@ -11,24 +11,18 @@ class SupplierInquiry extends Model
 
     protected $fillable = [
         'supplier_id',
-        'name',
-        'email',
-        'phone',
-        'company',
+        'full_name',
+        'email_address',
+        'phone_number',
         'subject',
         'message',
-        'status',
-        'is_unread',
-        'last_response',
-        'last_response_at',
-        'handled_by_admin_id',
-        'handled_at',
+        'is_read',
+        'from',
+        'admin_id',
     ];
 
     protected $casts = [
-        'is_unread' => 'boolean',
-        'last_response_at' => 'datetime',
-        'handled_at' => 'datetime',
+        'is_read' => 'boolean',
     ];
 
     public function supplier()
@@ -36,8 +30,26 @@ class SupplierInquiry extends Model
         return $this->belongsTo(Supplier::class);
     }
 
-    public function handledBy()
+    public function admin()
     {
-        return $this->belongsTo(Admin::class, 'handled_by_admin_id');
+        return $this->belongsTo(Admin::class, 'admin_id');
+    }
+
+    // Helper method to check if inquiry is unread
+    public function isUnread(): bool
+    {
+        return !$this->is_read;
+    }
+
+    // Helper method to mark as read
+    public function markAsRead(): bool
+    {
+        return $this->update(['is_read' => true]);
+    }
+
+    // Helper method to assign to admin
+    public function assignToAdmin(Admin $admin): bool
+    {
+        return $this->update(['admin_id' => $admin->id]);
     }
 }
