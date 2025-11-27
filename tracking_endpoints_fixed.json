@@ -1,0 +1,96 @@
+{
+  "tracking_endpoints": {
+    "base_url": "http://localhost:8000/api/supplier/analytics",
+    "authentication": "Required - Bearer Token",
+    "endpoints": [
+      {
+        "name": "Track Profile View",
+        "method": "POST",
+        "url": "/track-view",
+        "full_url": "http://localhost:8000/api/supplier/analytics/track-view",
+        "description": "Track when an authenticated user views a supplier profile",
+        "headers": {
+          "Content-Type": "application/json",
+          "Accept": "application/json",
+          "Authorization": "Bearer 123|kT7dJgOpOP7GWRHwHsFvPj3aM6YFIN8JTUi5MIrb5212e7b0"
+        },
+        "body": {
+          "supplier_id": 50,
+          "location": "Riyadh",
+          "customer_type": "Large Organizations",
+          "duration": 120,
+          "session_id": "abc123"
+        },
+        "required_fields": ["supplier_id"],
+        "optional_fields": ["location", "customer_type", "duration", "session_id"],
+        "customer_type_options": ["Large Organizations", "Small Businesses", "Individuals"],
+        "response": {
+          "success": {
+            "status": 200,
+            "message": "View tracked successfully"
+          },
+          "error": {
+            "status": 400,
+            "message": "Supplier ID required"
+          }
+        }
+      },
+      {
+        "name": "Track Search",
+        "method": "POST",
+        "url": "/track-search",
+        "full_url": "http://localhost:8000/api/supplier/analytics/track-search",
+        "description": "Track when an authenticated user performs a search",
+        "headers": {
+          "Content-Type": "application/json",
+          "Accept": "application/json",
+          "Authorization": "Bearer 123|kT7dJgOpOP7GWRHwHsFvPj3aM6YFIN8JTUi5MIrb5212e7b0"
+        },
+        "body": {
+          "keyword": "MacBook Pro",
+          "search_type": "supplier",
+          "location": "Cairo"
+        },
+        "required_fields": ["keyword"],
+        "optional_fields": ["search_type", "location"],
+        "search_type_options": ["supplier", "product", "category"],
+        "response": {
+          "success": {
+            "status": 200,
+            "message": "Search tracked successfully"
+          },
+          "error": {
+            "status": 400,
+            "message": "Keyword required"
+          }
+        }
+      }
+    ],
+    "curl_examples": {
+      "track_view": "curl -X POST \"http://localhost:8000/api/supplier/analytics/track-view\" \\\n     -H \"Content-Type: application/json\" \\\n     -H \"Authorization: Bearer 123|kT7dJgOpOP7GWRHwHsFvPj3aM6YFIN8JTUi5MIrb5212e7b0\" \\\n     -d '{\"supplier_id\": 50, \"location\": \"Riyadh\", \"customer_type\": \"Large Organizations\"}'",
+      "track_search": "curl -X POST \"http://localhost:8000/api/supplier/analytics/track-search\" \\\n     -H \"Content-Type: application/json\" \\\n     -H \"Authorization: Bearer 123|kT7dJgOpOP7GWRHwHsFvPj3aM6YFIN8JTUi5MIrb5212e7b0\" \\\n     -d '{\"keyword\": \"MacBook Pro\", \"search_type\": \"supplier\", \"location\": \"Cairo\"}'"
+    },
+    "javascript_examples": {
+      "track_view": "fetch('/api/supplier/analytics/track-view', {\n  method: 'POST',\n  headers: {\n    'Content-Type': 'application/json',\n    'Authorization': 'Bearer ' + token\n  },\n  body: JSON.stringify({\n    supplier_id: 50,\n    location: 'Riyadh',\n    customer_type: 'Large Organizations'\n  })\n})",
+      "track_search": "fetch('/api/supplier/analytics/track-search', {\n  method: 'POST',\n  headers: {\n    'Content-Type': 'application/json',\n    'Authorization': 'Bearer ' + token\n  },\n  body: JSON.stringify({\n    keyword: 'MacBook Pro',\n    search_type: 'supplier',\n    location: 'Cairo'\n  })\n})"
+    },
+    "notes": [
+      "These endpoints are AUTHENTICATED - Bearer token required",
+      "Track view should be called when an authenticated user visits a supplier profile page",
+      "Track search should be called when an authenticated user performs a search on the platform",
+      "The authenticated user (searcher/viewer) is automatically tracked - no need to send user_id",
+      "supplier_id in track-view is the profile being viewed",
+      "supplier_id is NOT needed in track-search - it uses authenticated user automatically",
+      "Data from these endpoints populates the analytics dashboard",
+      "customer_type helps in customer demographics analysis",
+      "location data helps in geographic insights"
+    ],
+    "changes_made": [
+      "Fixed profile_views column error - now uses analytics_views_history table",
+      "Endpoints now require authentication to track the actual user",
+      "Track view uses authenticated user as the viewer",
+      "Track search uses authenticated user as the searcher",
+      "No more supplier_id needed in track-search - uses authenticated user automatically"
+    ]
+  }
+}

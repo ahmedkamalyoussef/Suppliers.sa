@@ -44,8 +44,12 @@ class SupplierDashboardController extends Controller
 
     private function buildStats(Supplier $supplier, Carbon $rangeStart): array
     {
-        // 1. Profile Views - from supplier_profiles table
-        $currentViews = (int) ($supplier->profile?->profile_views ?? 0);
+        // 1. Profile Views - from analytics_views_history table
+        $currentViews = \DB::table('analytics_views_history')
+            ->where('supplier_id', $supplier->id)
+            ->where('date', '>=', $rangeStart->toDateString())
+            ->sum('views_count');
+        
         $previousViews = $this->getPreviousPeriodViews($supplier, $rangeStart);
         $viewsChange = $previousViews > 0 ? (($currentViews - $previousViews) / $previousViews) * 100 : 0;
 
@@ -67,7 +71,7 @@ class SupplierDashboardController extends Controller
 
         return [
             'views' => [
-                'current' => $currentViews,
+                'current' => (int) $currentViews,
                 'change' => round($viewsChange, 1),
                 'trend' => $viewsChange >= 0 ? 'up' : 'down',
             ],
@@ -533,9 +537,15 @@ class SupplierDashboardController extends Controller
 
     private function getPreviousPeriodViews(Supplier $supplier, Carbon $rangeStart): int
     {
-        // For views, we'll use a simple calculation since we don't track historical views
-        // This could be improved by storing view history
-        return max(0, ($supplier->profile?->profile_views ?? 0) - 10);
+        // Get views from previous period (same duration, before current range)
+        $rangeLength = $rangeStart->diffInDays(now()) + 1;
+        $previousStart = $rangeStart->copy()->subDays($rangeLength);
+        $previousEnd = $rangeStart->copy()->subDay();
+        
+        return \DB::table('analytics_views_history')
+            ->where('supplier_id', $supplier->id)
+            ->whereBetween('date', [$previousStart->toDateString(), $previousEnd->toDateString()])
+            ->sum('views_count');
     }
 
     private function getContactRequests(Supplier $supplier): int

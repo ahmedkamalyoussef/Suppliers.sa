@@ -1,0 +1,256 @@
+{
+  "test_endpoints": {
+    "base_url": "http://localhost:8000/api/supplier/analytics",
+    "token": "123|kT7dJgOpOP7GWRHwHsFvPj3aM6YFIN8JTUi5MIrb5212e7b0",
+    "headers": {
+      "Content-Type": "application/json",
+      "Accept": "application/json",
+      "Authorization": "Bearer 123|kT7dJgOpOP7GWRHwHsFvPj3aM6YFIN8JTUi5MIrb5212e7b0"
+    }
+  },
+  "endpoints": {
+    "performance_metrics": {
+      "url": "/performance",
+      "method": "GET",
+      "description": "Get real performance metrics (Profile Completion, Response Rate, etc.)",
+      "expected_response": {
+        "metrics": [
+          {
+            "metric": "Profile Completion",
+            "value": 85.7,
+            "target": 100,
+            "color": "bg-green-500",
+            "unit": "%"
+          },
+          {
+            "metric": "Response Rate",
+            "value": 100,
+            "target": 90,
+            "color": "bg-yellow-500",
+            "unit": "%"
+          },
+          {
+            "metric": "Customer Satisfaction",
+            "value": 3,
+            "target": 4.5,
+            "color": "bg-blue-500",
+            "unit": "stars",
+            "isRating": true
+          },
+          {
+            "metric": "Search Visibility",
+            "value": 58.57,
+            "target": 80,
+            "color": "bg-purple-500",
+            "unit": "%"
+          }
+        ],
+        "overallScore": 76.1
+      }
+    },
+    "charts_views": {
+      "url": "/charts?range=30&type=views",
+      "method": "GET",
+      "description": "Get 30 days views chart data",
+      "expected_response": {
+        "type": "views",
+        "range": 30,
+        "data": [12, 15, 8, 25, 30, 18, 22, 35, 28, 40, 33, 45, 38, 50, 42, 55, 48, 60, 52, 58, 45, 62, 55, 68, 60, 72, 65, 78, 70, 75],
+        "labels": ["Oct 28", "Oct 29", "Oct 30", "Oct 31", "Nov 1", "Nov 2", "Nov 3", "Nov 4", "Nov 5", "Nov 6", "Nov 7", "Nov 8", "Nov 9", "Nov 10", "Nov 11", "Nov 12", "Nov 13", "Nov 14", "Nov 15", "Nov 16", "Nov 17", "Nov 18", "Nov 19", "Nov 20", "Nov 21", "Nov 22", "Nov 23", "Nov 24", "Nov 25", "Nov 26"]
+      }
+    },
+    "charts_contacts": {
+      "url": "/charts?range=7&type=contacts",
+      "method": "GET",
+      "description": "Get 7 days contacts chart data",
+      "expected_response": {
+        "type": "contacts",
+        "range": 7,
+        "data": [0, 0, 0, 0, 0, 0, 0],
+        "labels": ["Nov 20", "Nov 21", "Nov 22", "Nov 23", "Nov 24", "Nov 25", "Nov 26"]
+      }
+    },
+    "charts_inquiries": {
+      "url": "/charts?range=7&type=inquiries",
+      "method": "GET",
+      "description": "Get 7 days business inquiries chart data",
+      "expected_response": {
+        "type": "inquiries",
+        "range": 7,
+        "data": [0, 0, 0, 0, 0, 0, 0],
+        "labels": ["Nov 20", "Nov 21", "Nov 22", "Nov 23", "Nov 24", "Nov 25", "Nov 26"]
+      }
+    },
+    "keywords": {
+      "url": "/keywords",
+      "method": "GET",
+      "description": "Get search keywords analytics (empty until data exists)",
+      "expected_response": {
+        "keywords": [],
+        "totalSearches": 0,
+        "averageChange": 0,
+        "period": "Last 30 days"
+      }
+    },
+    "insights": {
+      "url": "/insights",
+      "method": "GET",
+      "description": "Get customer demographics and locations (empty until visitors exist)",
+      "expected_response": {
+        "demographics": [],
+        "topLocations": [],
+        "totalVisitors": 0,
+        "totalCustomers": 0,
+        "period": "Last 30 days"
+      }
+    },
+    "recommendations": {
+      "url": "/recommendations",
+      "method": "GET",
+      "description": "Get personalized recommendations based on data",
+      "expected_response": {
+        "recommendations": [
+          "Add product keywords to appear in more relevant searches",
+          "Upload more photos to showcase your products and services",
+          "Encourage customers to leave reviews to build trust"
+        ],
+        "priority": "medium",
+        "generated_at": "2025-11-27T04:46:19.406237Z"
+      }
+    },
+    "export_inquiries": {
+      "url": "/export?type=inquiries&format=csv",
+      "method": "GET",
+      "description": "Export inquiries data as CSV",
+      "expected_response": {
+        "message": "Export prepared successfully",
+        "download_url": "/api/supplier/analytics/download/export_1234567890.csv?token=...",
+        "filename": "inquiries_export.csv",
+        "expires_at": "2025-11-27T05:46:19.406237Z",
+        "file_size": "0.00 KB",
+        "records_count": 0,
+        "export_type": "inquiries"
+      }
+    },
+    "export_ratings": {
+      "url": "/export?type=ratings&format=csv",
+      "method": "GET",
+      "description": "Export ratings data as CSV",
+      "expected_response": {
+        "message": "Export prepared successfully",
+        "download_url": "/api/supplier/analytics/download/export_1234567891.csv?token=...",
+        "filename": "ratings_export.csv",
+        "expires_at": "2025-11-27T05:46:19.406237Z",
+        "file_size": "0.00 KB",
+        "records_count": 0,
+        "export_type": "ratings"
+      }
+    },
+    "export_all": {
+      "url": "/export?type=all&format=json",
+      "method": "GET",
+      "description": "Export all analytics summary as JSON",
+      "expected_response": {
+        "message": "Export prepared successfully",
+        "download_url": "/api/supplier/analytics/download/export_1234567892.json?token=...",
+        "filename": "analytics_export.json",
+        "expires_at": "2025-11-27T05:46:19.406237Z",
+        "file_size": "0.00 KB",
+        "records_count": 1,
+        "export_type": "all"
+      }
+    }
+  },
+  "curl_commands": {
+    "performance": "curl -X GET \"http://localhost:8000/api/supplier/analytics/performance\" -H \"Authorization: Bearer 123|kT7dJgOpOP7GWRHwHsFvPj3aM6YFIN8JTUi5MIrb5212e7b0\" -s | python3 -m json.tool",
+    "charts_views": "curl -X GET \"http://localhost:8000/api/supplier/analytics/charts?range=30&type=views\" -H \"Authorization: Bearer 123|kT7dJgOpOP7GWRHwHsFvPj3aM6YFIN8JTUi5MIrb5212e7b0\" -s | python3 -m json.tool",
+    "charts_contacts": "curl -X GET \"http://localhost:8000/api/supplier/analytics/charts?range=7&type=contacts\" -H \"Authorization: Bearer 123|kT7dJgOpOP7GWRHwHsFvPj3aM6YFIN8JTUi5MIrb5212e7b0\" -s | python3 -m json.tool",
+    "charts_inquiries": "curl -X GET \"http://localhost:8000/api/supplier/analytics/charts?range=7&type=inquiries\" -H \"Authorization: Bearer 123|kT7dJgOpOP7GWRHwHsFvPj3aM6YFIN8JTUi5MIrb5212e7b0\" -s | python3 -m json.tool",
+    "keywords": "curl -X GET \"http://localhost:8000/api/supplier/analytics/keywords\" -H \"Authorization: Bearer 123|kT7dJgOpOP7GWRHwHsFvPj3aM6YFIN8JTUi5MIrb5212e7b0\" -s | python3 -m json.tool",
+    "insights": "curl -X GET \"http://localhost:8000/api/supplier/analytics/insights\" -H \"Authorization: Bearer 123|kT7dJgOpOP7GWRHwHsFvPj3aM6YFIN8JTUi5MIrb5212e7b0\" -s | python3 -m json.tool",
+    "recommendations": "curl -X GET \"http://localhost:8000/api/supplier/analytics/recommendations\" -H \"Authorization: Bearer 123|kT7dJgOpOP7GWRHwHsFvPj3aM6YFIN8JTUi5MIrb5212e7b0\" -s | python3 -m json.tool",
+    "export_inquiries": "curl -X GET \"http://localhost:8000/api/supplier/analytics/export?type=inquiries&format=csv\" -H \"Authorization: Bearer 123|kT7dJgOpOP7GWRHwHsFvPj3aM6YFIN8JTUi5MIrb5212e7b0\" -s | python3 -m json.tool",
+    "export_ratings": "curl -X GET \"http://localhost:8000/api/supplier/analytics/export?type=ratings&format=csv\" -H \"Authorization: Bearer 123|kT7dJgOpOP7GWRHwHsFvPj3aM6YFIN8JTUi5MIrb5212e7b0\" -s | python3 -m json.tool",
+    "export_all": "curl -X GET \"http://localhost:8000/api/supplier/analytics/export?type=all&format=json\" -H \"Authorization: Bearer 123|kT7dJgOpOP7GWRHwHsFvPj3aM6YFIN8JTUi5MIrb5212e7b0\" -s | python3 -m json.tool"
+  },
+  "test_data_examples": {
+    "keywords_with_data": {
+      "keywords": [
+        {
+          "keyword": "LED TV",
+          "searches": 156,
+          "change": 12,
+          "contacts": 8,
+          "last_searched": "2025-11-26"
+        },
+        {
+          "keyword": "Samsung electronics",
+          "searches": 134,
+          "change": 8,
+          "contacts": 5,
+          "last_searched": "2025-11-25"
+        }
+      ],
+      "totalSearches": 290,
+      "averageChange": 10,
+      "period": "Last 30 days"
+    },
+    "insights_with_data": {
+      "demographics": [
+        {
+          "type": "Large Organizations",
+          "percentage": 45,
+          "count": 127
+        },
+        {
+          "type": "Small Businesses",
+          "percentage": 35,
+          "count": 98
+        },
+        {
+          "type": "Individuals",
+          "percentage": 20,
+          "count": 56
+        }
+      ],
+      "topLocations": [
+        {
+          "city": "Riyadh",
+          "visitors": 234,
+          "percentage": 42
+        },
+        {
+          "city": "Jeddah",
+          "visitors": 156,
+          "percentage": 28
+        },
+        {
+          "city": "Dammam",
+          "visitors": 89,
+          "percentage": 16
+        }
+      ],
+      "totalVisitors": 479,
+      "totalCustomers": 281,
+      "period": "Last 30 days"
+    },
+    "export_inquiries_data": [
+      {
+        "full_name": "Ahmed Mohamed",
+        "email_address": "ahmed@example.com",
+        "phone_number": "+966123456789",
+        "subject": "Bulk order inquiry",
+        "message": "Need 100 units of LED TVs",
+        "created_at": "2025-11-26T10:30:00.000000Z"
+      },
+      {
+        "full_name": "Sara Ali",
+        "email_address": "sara@example.com",
+        "phone_number": "+966987654321",
+        "subject": "Partnership opportunity",
+        "message": "Interested in distribution partnership",
+        "created_at": "2025-11-25T14:20:00.000000Z"
+      }
+    ]
+  }
+}

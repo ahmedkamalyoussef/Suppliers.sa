@@ -89,13 +89,7 @@ Route::prefix('supplier')->group(function () {
 // Public super admin bootstrap: allowed only if no super admin exists (enforced in controller)
 Route::post('/admins/register-super', [AdminController::class, 'registerSuper']);
 
-/*
-||--------------------------------------------------------------------------
-|| Protected Routes (Authenticated)
-||--------------------------------------------------------------------------
-*/
 Route::middleware('auth:sanctum')->group(function () {
-
     // Get supplier business with products
     Route::get('/suppliers/{id}/business', 'App\\Http\\Controllers\\SupplierController@getSupplierBusiness');
 
@@ -104,7 +98,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Shared
     Route::post('/auth/logout', [AuthController::class, 'logout']);
-    Route::post('/auth/change-password', [PasswordController::class, 'changePassword']);
+    Route::post('/auth/change-password', [PasswordController::class, 'change-password']);
 
     // Admin Profile (Admin can update their own profile)
     Route::prefix('admin')->group(function () {
@@ -174,6 +168,18 @@ Route::middleware('auth:sanctum')->group(function () {
         
         // Public supplier profile view
         Route::get('/{supplier}/view', [\App\Http\Controllers\Supplier\SupplierViewController::class, 'view']);
+        
+        // Analytics tracking endpoints (authenticated)
+        Route::prefix('analytics')->group(function () {
+            Route::post('/track-view', [\App\Http\Controllers\Supplier\AnalyticsController::class, 'trackView']);
+            Route::post('/track-search', [\App\Http\Controllers\Supplier\AnalyticsController::class, 'trackSearch']);
+            Route::get('/charts', [\App\Http\Controllers\Supplier\AnalyticsController::class, 'charts']);
+            Route::get('/keywords', [\App\Http\Controllers\Supplier\AnalyticsController::class, 'keywords']);
+            Route::get('/insights', [\App\Http\Controllers\Supplier\AnalyticsController::class, 'insights']);
+            Route::get('/performance', [\App\Http\Controllers\Supplier\AnalyticsController::class, 'performance']);
+            Route::get('/recommendations', [\App\Http\Controllers\Supplier\AnalyticsController::class, 'recommendations']);
+            Route::get('/export', [\App\Http\Controllers\Supplier\AnalyticsController::class, 'export']);
+        });
         
         // Supplier to Supplier Inquiries (New)
         Route::prefix('supplier-inquiries')->group(function () {

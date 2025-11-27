@@ -1,0 +1,84 @@
+{
+  "tracking_endpoints": {
+    "base_url": "http://localhost:8000/api/supplier/analytics",
+    "endpoints": [
+      {
+        "name": "Track Profile View",
+        "method": "POST",
+        "url": "/track-view",
+        "full_url": "http://localhost:8000/api/supplier/analytics/track-view",
+        "description": "Track when someone views a supplier profile",
+        "headers": {
+          "Content-Type": "application/json",
+          "Accept": "application/json"
+        },
+        "body": {
+          "supplier_id": 49,
+          "location": "Riyadh",
+          "customer_type": "Large Organizations",
+          "duration": 120,
+          "session_id": "abc123"
+        },
+        "required_fields": ["supplier_id"],
+        "optional_fields": ["location", "customer_type", "duration", "session_id"],
+        "customer_type_options": ["Large Organizations", "Small Businesses", "Individuals"],
+        "response": {
+          "success": {
+            "status": 200,
+            "message": "View tracked successfully"
+          },
+          "error": {
+            "status": 400,
+            "message": "Supplier ID required"
+          }
+        }
+      },
+      {
+        "name": "Track Search",
+        "method": "POST",
+        "url": "/track-search",
+        "full_url": "http://localhost:8000/api/supplier/analytics/track-search",
+        "description": "Track when someone searches on the platform",
+        "headers": {
+          "Content-Type": "application/json",
+          "Accept": "application/json"
+        },
+        "body": {
+          "keyword": "LED TV",
+          "search_type": "supplier",
+          "supplier_id": 49,
+          "location": "Riyadh"
+        },
+        "required_fields": ["keyword"],
+        "optional_fields": ["search_type", "supplier_id", "location"],
+        "search_type_options": ["supplier", "product", "category"],
+        "response": {
+          "success": {
+            "status": 200,
+            "message": "Search tracked successfully"
+          },
+          "error": {
+            "status": 400,
+            "message": "Keyword required"
+          }
+        }
+      }
+    ],
+    "curl_examples": {
+      "track_view": "curl -X POST \"http://localhost:8000/api/supplier/analytics/track-view\" \\\n     -H \"Content-Type: application/json\" \\\n     -d '{\"supplier_id\": 49, \"location\": \"Riyadh\", \"customer_type\": \"Large Organizations\"}'",
+      "track_search": "curl -X POST \"http://localhost:8000/api/supplier/analytics/track-search\" \\\n     -H \"Content-Type: application/json\" \\\n     -d '{\"keyword\": \"LED TV\", \"search_type\": \"supplier\", \"location\": \"Riyadh\"}'"
+    },
+    "javascript_examples": {
+      "track_view": "fetch('/api/supplier/analytics/track-view', {\n  method: 'POST',\n  headers: {\n    'Content-Type': 'application/json'\n  },\n  body: JSON.stringify({\n    supplier_id: 49,\n    location: 'Riyadh',\n    customer_type: 'Large Organizations'\n  })\n})",
+      "track_search": "fetch('/api/supplier/analytics/track-search', {\n  method: 'POST',\n  headers: {\n    'Content-Type': 'application/json'\n  },\n  body: JSON.stringify({\n    keyword: 'LED TV',\n    search_type: 'supplier',\n    location: 'Riyadh'\n  })\n})"
+    },
+    "notes": [
+      "These endpoints are PUBLIC - no authentication required",
+      "Track view should be called when someone visits a supplier profile page",
+      "Track search should be called when someone performs a search on the platform",
+      "Data from these endpoints populates the analytics dashboard",
+      "customer_type helps in customer demographics analysis",
+      "location data helps in geographic insights"
+    ]
+  }
+}
