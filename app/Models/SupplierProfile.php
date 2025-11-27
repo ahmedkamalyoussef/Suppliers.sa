@@ -10,6 +10,8 @@ class SupplierProfile extends Model
     use HasFactory;
 
     protected $fillable = [
+        'supplier_id',
+        'slug',
         'business_name',
         'business_type',
         'description',

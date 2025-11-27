@@ -714,14 +714,29 @@ class AnalyticsController extends Controller
     }
     
     protected function computeResponseRate(Supplier $supplier): float
-    {
-        // Calculate based on inquiries vs responses
-        $totalInquiries = $supplier->inquiries()->count();
-        $respondedInquiries = $supplier->inquiries()->whereNotNull('admin_id')->count();
+    {$supplierId = $supplier->id;
+    
+    // Count inquiries received by this supplier
+    $inquiriesReceived = \DB::table('supplier_to_supplier_inquiries')
+        ->where('receiver_supplier_id', $supplierId)
+        ->where('type', 'inquiry')
+        ->count();
         
-        if ($totalInquiries === 0) return 100;
-        
-        return round(($respondedInquiries / $totalInquiries) * 100, 1);
+    // Count replies sent by this supplier
+    $repliesSent = \DB::table('supplier_to_supplier_inquiries')
+        ->where('sender_supplier_id', $supplierId)
+        ->where('type', 'reply')
+        ->count();
+    
+    // If no inquiries, return 100%
+    if ($inquiriesReceived === 0) {
+        return 0;
+    }
+    
+    // Calculate response rate (capped at 100%)
+    $responseRate = min(($repliesSent / $inquiriesReceived) * 100, 100);
+    
+    return round($responseRate, 1);
     }
     
     protected function computeCustomerSatisfaction(Supplier $supplier): float
@@ -729,7 +744,7 @@ class AnalyticsController extends Controller
         // Calculate based on ratings
         $ratings = $supplier->ratings()->where('status', 'approved')->get();
         
-        if ($ratings->isEmpty()) return 4.0;
+        if ($ratings->isEmpty()) return 0.0;
         
         return round($ratings->avg('score'), 1);
     }

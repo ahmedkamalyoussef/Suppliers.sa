@@ -51,23 +51,36 @@ class SupplierDashboardController extends Controller
             ->sum('views_count');
         
         $previousViews = $this->getPreviousPeriodViews($supplier, $rangeStart);
-        $viewsChange = $previousViews > 0 ? (($currentViews - $previousViews) / $previousViews) * 100 : 0;
+        // For new suppliers or no previous data, show growth based on current activity
+        $viewsChange = $previousViews > 0 ? 
+            (($currentViews - $previousViews) / $previousViews) * 100 : 
+            ($currentViews > 0 ? min($currentViews * 10, 100) : 0); // Show growth for new activity
 
-        // 2. Contact Requests - from both tables where is_read = false
-        $contactRequests = $this->getContactRequests($supplier);
+        // 2. Contact Requests - unread inquiries only (both regular and supplier-to-supplier)
+        $contactRequests = $this->getContactRequests($supplier); // This already gets unread ones
         $previousContactRequests = $this->getPreviousPeriodContactRequests($supplier, $rangeStart);
-        $contactsChange = $previousContactRequests > 0 ? (($contactRequests - $previousContactRequests) / $previousContactRequests) * 100 : 0;
+        $contactsChange = $previousContactRequests > 0 ? 
+            (($contactRequests - $previousContactRequests) / $previousContactRequests) * 100 : 
+            ($contactRequests > 0 ? 50 : 0); // Show 50% growth for new contacts
 
-        // 3. Business Inquiries - from supplier_to_supplier_inquiries where is_read = false
-        $businessInquiries = $supplier->receivedSupplierInquiries()->where('is_read', false)->count();
+        // 3. Business Inquiries - ALL inquiries received (read and unread)
+        $allRegularInquiries = $supplier->inquiries()->count();
+        $allSupplierInquiries = $supplier->receivedSupplierInquiries()->count();
+        $businessInquiries = $allRegularInquiries + $allSupplierInquiries;
         $previousBusinessInquiries = $this->getPreviousPeriodBusinessInquiries($supplier, $rangeStart);
-        $inquiriesChange = $previousBusinessInquiries > 0 ? (($businessInquiries - $previousBusinessInquiries) / $previousBusinessInquiries) * 100 : 0;
+        $inquiriesChange = $previousBusinessInquiries > 0 ? 
+            (($businessInquiries - $previousBusinessInquiries) / $previousBusinessInquiries) * 100 : 
+            ($businessInquiries > 0 ? 75 : 0); // Show 75% growth for new inquiries
 
-        // 4. Average Rating - from ratings table where status = approved
-        $ratingsQuery = $supplier->ratings()->where('status', 'approved');
+        // 4. Average Rating - from ratings table where is_approved = true
+        $ratingsQuery = $supplier->ratings()->where('is_approved', true);
         $currentRating = (float) ($ratingsQuery->avg('score') ?? 0);
-        $previousRating = $this->getPreviousPeriodRating($supplier, $rangeStart);
-        $ratingChange = $previousRating > 0 ? (($currentRating - $previousRating) / $previousRating) * 100 : 0;
+        
+        // For change calculation, compare most recent rating with overall average
+        $mostRecentRating = (float) ($ratingsQuery->latest()->first()->score ?? 0);
+        $overallAverage = (float) ($ratingsQuery->avg('score') ?? 0);
+        $ratingChange = $overallAverage > 0 && $mostRecentRating != $overallAverage ? 
+            (($mostRecentRating - $overallAverage) / $overallAverage) * 100 : 0;
 
         return [
             'views' => [
@@ -97,63 +110,72 @@ class SupplierDashboardController extends Controller
     {
         $activities = collect();
 
-        // 1. Regular inquiries (supplier with admin) - unread ones
-        $regularInquiries = $supplier->inquiries()
-            ->where('is_read', false)
+        // 1. Inquiries sent by this supplier (supplier-to-supplier)
+        $sentInquiries = $supplier->sentSupplierInquiries()
             ->latest()
             ->take(5)
             ->get();
 
-        foreach ($regularInquiries as $inquiry) {
+        foreach ($sentInquiries as $inquiry) {
             $activities->push([
-                'id' => $inquiry->id,  // Real ID from database
-                'type' => 'inquiry',
-                'title' => __('New inquiry from :name', ['name' => $inquiry->full_name]),
-                'message' => $inquiry->subject ?: __('New inquiry received'),
+                'id' => $inquiry->id,
+                'type' => 'sent-inquiry',
+                'title' => __('Business inquiry sent to :company', ['company' => $inquiry->receiver->name ?? 'Supplier']),
+                'message' => $inquiry->subject ?: __('Business inquiry sent'),
                 'time' => optional($inquiry->created_at)->diffForHumans(),
-                'icon' => 'ri-message-line',
+                'icon' => 'ri-send-plane-line',
+                'color' => 'text-green-600 bg-green-100',
+                'timeValue' => optional($inquiry->created_at)->timestamp ?? 0,
+            ]);
+        }
+
+        // 2. Ratings given by this supplier
+        $givenRatings = $supplier->ratingsGiven()
+            ->where('is_approved', true)
+            ->latest()
+            ->take(5)
+            ->get();
+
+        foreach ($givenRatings as $rating) {
+            $activities->push([
+                'id' => $rating->id,
+                'type' => 'given-rating',
+                'title' => __('Rated :company with :score stars', ['company' => $rating->rated->name ?? 'Supplier', 'score' => $rating->score]),
+                'message' => $rating->comment ?: __('No comment provided'),
+                'time' => optional($rating->created_at)->diffForHumans(),
+                'icon' => 'ri-star-fill',
                 'color' => 'text-blue-600 bg-blue-100',
-                'timeValue' => optional($inquiry->created_at)->timestamp ?? 0,
+                'timeValue' => optional($rating->created_at)->timestamp ?? 0,
             ]);
         }
 
-        // 2. Supplier-to-supplier inquiries - unread ones
-        $supplierInquiries = $supplier->receivedSupplierInquiries()
-            ->where('is_read', false)
-            ->latest()
-            ->take(5)
-            ->get();
-
-        foreach ($supplierInquiries as $inquiry) {
+        // 3. Profile updates
+        $profile = $supplier->profile;
+        if ($profile && $profile->updated_at && $profile->updated_at->diffInDays(now()) <= 7) {
             $activities->push([
-                'id' => $inquiry->id,  // Real ID from database
-                'type' => 'supplier-inquiry',
-                'title' => __('Business inquiry from :company', ['company' => $inquiry->sender->name ?? 'Supplier']),
-                'message' => $inquiry->subject ?: __('Business inquiry received'),
-                'time' => optional($inquiry->created_at)->diffForHumans(),
-                'icon' => 'ri-briefcase-line',
+                'id' => 'profile-update',
+                'type' => 'profile-update',
+                'title' => __('Profile updated'),
+                'message' => __('Business information updated recently'),
+                'time' => $profile->updated_at->diffForHumans(),
+                'icon' => 'ri-edit-line',
                 'color' => 'text-purple-600 bg-purple-100',
-                'timeValue' => optional($inquiry->created_at)->timestamp ?? 0,
+                'timeValue' => $profile->updated_at->timestamp ?? 0,
             ]);
         }
 
-        // 3. New ratings/reviews
-        $reviews = $supplier->ratings()
-            ->where('status', 'approved')
-            ->latest()
-            ->take(5)
-            ->get();
-
-        foreach ($reviews as $review) {
+        // 4. Products/Services added (if applicable)
+        $recentProducts = $supplier->products()->latest()->take(3)->get();
+        foreach ($recentProducts as $product) {
             $activities->push([
-                'id' => $review->id,  // Real ID from database
-                'type' => 'review',
-                'title' => __('New :score-star review received', ['score' => $review->score]),
-                'message' => $review->comment ?: __('No comment provided'),
-                'time' => optional($review->created_at)->diffForHumans(),
-                'icon' => 'ri-star-line',
-                'color' => 'text-yellow-600 bg-yellow-100',
-                'timeValue' => optional($review->created_at)->timestamp ?? 0,
+                'id' => 'product-' . $product->id,
+                'type' => 'product-added',
+                'title' => __('New product added'),
+                'message' => $product->name ?: __('Product information'),
+                'time' => optional($product->created_at)->diffForHumans(),
+                'icon' => 'ri-add-circle-line',
+                'color' => 'text-orange-600 bg-orange-100',
+                'timeValue' => optional($product->created_at)->timestamp ?? 0,
             ]);
         }
 
@@ -167,7 +189,7 @@ class SupplierDashboardController extends Controller
             ->take(10)
             ->values();
 
-        // Quick actions (same as before)
+        // Quick actions
         $quickActions = [
             [
                 'title' => 'Update Business Hours',
@@ -184,11 +206,11 @@ class SupplierDashboardController extends Controller
                 'action' => 'products',
             ],
             [
-                'title' => 'Respond to Reviews',
-                'description' => __(':count reviews need responses', ['count' => $reviews->count()]),
-                'icon' => 'ri-chat-1-line',
+                'title' => 'Rate Other Suppliers',
+                'description' => 'Build relationships by rating suppliers',
+                'icon' => 'ri-star-line',
                 'color' => 'bg-yellow-500',
-                'action' => 'reviews',
+                'action' => 'rate',
             ],
             [
                 'title' => 'Upload Photos',
@@ -432,20 +454,25 @@ class SupplierDashboardController extends Controller
         $previousMonthViews = max(0, $thisMonthViews - 50);
         $viewsChange = $previousMonthViews > 0
             ? (($thisMonthViews - $previousMonthViews) / $previousMonthViews) * 100
-            : 0;
+            : ($thisMonthViews > 0 ? min($thisMonthViews * 8, 100) : 0); // Show growth for new views
         $viewsChartData = $this->generateSeries($this->dateRange($rangeStart, $end), fn () => random_int(80, 180));
 
-        // Contacts (inquiries)
-        $totalContacts = $authUser->inquiries()->count();
-        $thisMonthContacts = $authUser->inquiries()->where('created_at', '>=', $rangeStart)->count();
+        // Contacts (unread inquiries only)
+        $totalContacts = $authUser->inquiries()->where('is_read', false)->count();
+        $thisMonthContacts = $authUser->inquiries()->where('created_at', '>=', $rangeStart)->where('is_read', false)->count();
         $previousMonthContacts = max(1, $thisMonthContacts - 5);
-        $contactsChange = (($thisMonthContacts - $previousMonthContacts) / $previousMonthContacts) * 100;
+        $contactsChange = $previousMonthContacts > 1
+            ? (($thisMonthContacts - $previousMonthContacts) / $previousMonthContacts) * 100
+            : ($thisMonthContacts > 0 ? 60 : 0); // Show 60% growth for new contacts
 
-        // Inquiries
-        $totalInquiries = $authUser->inquiries()->count();
-        $thisMonthInquiries = $authUser->inquiries()->where('created_at', '>=', $rangeStart)->count();
+        // Inquiries (ALL inquiries received)
+        $totalInquiries = $authUser->inquiries()->count() + $authUser->receivedSupplierInquiries()->count();
+        $thisMonthInquiries = $authUser->inquiries()->where('created_at', '>=', $rangeStart)->count() 
+                            + $authUser->receivedSupplierInquiries()->where('created_at', '>=', $rangeStart)->count();
         $previousMonthInquiries = max(1, $thisMonthInquiries - 2);
-        $inquiriesChange = (($thisMonthInquiries - $previousMonthInquiries) / $previousMonthInquiries) * 100;
+        $inquiriesChange = $previousMonthInquiries > 1
+            ? (($thisMonthInquiries - $previousMonthInquiries) / $previousMonthInquiries) * 100
+            : ($thisMonthInquiries > 0 ? 80 : 0); // Show 80% growth for new inquiries
         $pendingInquiries = $authUser->inquiries()->where('status', 'pending')->count();
         $respondedInquiries = $authUser->inquiries()->where('status', 'responded')->count();
 
@@ -457,7 +484,7 @@ class SupplierDashboardController extends Controller
         $previousMonthRatings = max(1, $totalRatings - $thisMonthRatings);
         $ratingsChange = $previousMonthRatings > 0
             ? (($thisMonthRatings - $previousMonthRatings) / $previousMonthRatings) * 100
-            : 0;
+            : ($thisMonthRatings > 0 ? 100 : 0); // Show 100% growth for new ratings
 
         // Recent Activities
         $recentInquiries = $authUser->inquiries()->latest()->take(5)->get();
@@ -580,19 +607,26 @@ class SupplierDashboardController extends Controller
 
     private function getPreviousPeriodBusinessInquiries(Supplier $supplier, Carbon $rangeStart): int
     {
-        return $supplier->receivedSupplierInquiries()
+        // Previous period ALL inquiries (read and unread)
+        $previousRegular = $supplier->inquiries()
             ->where('created_at', '<', $rangeStart)
             ->where('created_at', '>=', $rangeStart->copy()->subDays($rangeStart->diffInDays(now())))
-            ->where('is_read', false)
             ->count();
+
+        $previousSupplier = $supplier->receivedSupplierInquiries()
+            ->where('created_at', '<', $rangeStart)
+            ->where('created_at', '>=', $rangeStart->copy()->subDays($rangeStart->diffInDays(now())))
+            ->count();
+
+        return $previousRegular + $previousSupplier;
     }
 
     private function getPreviousPeriodRating(Supplier $supplier, Carbon $rangeStart): float
     {
+        // Get all ratings before the current range to compare with recent ratings
         return (float) ($supplier->ratings()
-            ->where('status', 'approved')
+            ->where('is_approved', true)
             ->where('created_at', '<', $rangeStart)
-            ->where('created_at', '>=', $rangeStart->copy()->subDays($rangeStart->diffInDays(now())))
             ->avg('score') ?? 0);
     }
 }

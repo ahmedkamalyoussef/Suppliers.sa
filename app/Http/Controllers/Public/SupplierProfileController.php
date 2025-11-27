@@ -14,13 +14,10 @@ class SupplierProfileController extends Controller
             'profile',
             'services',
             'ratingsReceived.rater',
-            'approvedRatings',
+            'approvedRatings.rater',
             'certifications',
             'productImages'
         ])->findOrFail($id);
-        
-        // Eager load the rater relationship for approved ratings
-        $supplier->load(['approvedRatings.rater']);
 
         return response()->json([
             'id' => $supplier->id,
@@ -54,7 +51,7 @@ class SupplierProfileController extends Controller
                 'average' => $supplier->approvedRatings->avg('score'),
                 'count' => $supplier->approvedRatings->count(),
                 'reviews' => $supplier->ratingsReceived->filter(function($review) {
-                    return $review->is_approved;
+                    return $review->is_approved === true || $review->is_approved === 'approved';
                 })->map(function($review) {
                     return [
                         'id' => $review->id,
@@ -62,8 +59,8 @@ class SupplierProfileController extends Controller
                         'comment' => $review->comment,
                         'created_at' => $review->created_at->toDateTimeString(),
                         'user' => [
-                            'name' => $review->rater->name ?? null,
-                            'avatar' => $review->rater->profile_image ? asset($review->rater->profile_image) : null
+                            'name' => $review->rater?->name ?? null,
+                            'avatar' => ($review->rater && $review->rater->profile_image) ? asset($review->rater->profile_image) : null
                         ]
                     ];
                 })
