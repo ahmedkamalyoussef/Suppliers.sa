@@ -15,6 +15,8 @@ class SupplierRating extends Model
         'reviewer_email',
         'is_approved',
         'status',
+        'type',
+        'is_read',
         'moderated_by_admin_id',
         'moderated_at',
         'moderation_notes',
@@ -26,10 +28,15 @@ class SupplierRating extends Model
     {
         return [
             'is_approved' => 'boolean',
+            'is_read' => 'boolean',
             'moderated_at' => 'datetime',
             'flagged_at' => 'datetime',
         ];
     }
+
+    protected $attributes = [
+        'type' => 'review',
+    ];
 
     public function rater()
     {
@@ -49,5 +56,15 @@ class SupplierRating extends Model
     public function flaggedBy()
     {
         return $this->belongsTo(Admin::class, 'flagged_by_admin_id');
+    }
+
+    public function replies()
+    {
+        return $this->hasMany(ReviewReply::class, 'supplier_rating_id');
+    }
+
+    public function reply()
+    {
+        return $this->hasOne(ReviewReply::class, 'supplier_rating_id');
     }
 }

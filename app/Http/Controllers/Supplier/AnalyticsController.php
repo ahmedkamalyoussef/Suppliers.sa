@@ -213,11 +213,16 @@ class AnalyticsController extends Controller
         /** @var Supplier $supplier */
         $supplier = $request->user();
         
+        // Get range parameter (default 30 days, max 180)
+        $range = (int) $request->query('range', 30);
+        $range = min($range, 180);
+        
         // Calculate real metrics where possible
         $profileCompletion = $this->computeProfileCompletion($supplier);
         $responseRate = $this->computeResponseRate($supplier);
         $customerSatisfaction = $this->computeCustomerSatisfaction($supplier);
-        $searchVisibility = $this->computeSearchVisibility($supplier);
+        $searchVisibility = $this->computeSearchVisibility($supplier, $range);
+        $contacts = $this->computeContacts($supplier);
         
         $metrics = [
             [
@@ -262,11 +267,16 @@ class AnalyticsController extends Controller
         /** @var Supplier $supplier */
         $supplier = $request->user();
         
+        // Get range parameter (default 30 days, max 180)
+        $range = (int) $request->query('range', 30);
+        $range = min($range, 180);
+        
         // Calculate current metrics
         $profileCompletion = $this->computeProfileCompletion($supplier);
         $responseRate = $this->computeResponseRate($supplier);
         $customerSatisfaction = $this->computeCustomerSatisfaction($supplier);
-        $searchVisibility = $this->computeSearchVisibility($supplier);
+        $searchVisibility = $this->computeSearchVisibility($supplier, $range);
+        $contacts = $this->computeContacts($supplier);
         
         $totalInquiries = $supplier->inquiries()->count();
         $totalRatings = $supplier->ratings()->where('status', 'approved')->count();
@@ -374,12 +384,17 @@ class AnalyticsController extends Controller
         
         $format = $request->query('format', 'csv');
         
+        // Get range parameter (default 30 days, max 180)
+        $range = (int) $request->query('range', 30);
+        $range = min($range, 180);
+        
         // Generate unified export data
         $exportData = [
             'profile_completion' => $this->computeProfileCompletion($supplier),
             'response_rate' => $this->computeResponseRate($supplier),
             'customer_satisfaction' => $this->computeCustomerSatisfaction($supplier),
-            'search_visibility' => $this->computeSearchVisibility($supplier),
+            'search_visibility' => $this->computeSearchVisibility($supplier, $range),
+            'contacts' => $this->computeContacts($supplier),
             'total_inquiries' => $supplier->inquiries()->count(),
             'total_ratings' => $supplier->ratings()->where('status', 'approved')->count(),
             'profile_views' => \DB::table('analytics_views_history')
@@ -565,6 +580,7 @@ class AnalyticsController extends Controller
             'Response Rate (%)',
             'Customer Satisfaction (stars)',
             'Search Visibility (%)',
+            'Contacts',
             'Total Inquiries',
             'Total Ratings',
             'Profile Views',
@@ -580,6 +596,7 @@ class AnalyticsController extends Controller
             $data['response_rate'] ?? 0,
             $data['customer_satisfaction'] ?? 0,
             $data['search_visibility'] ?? 0,
+            $data['contacts'] ?? 0,
             $data['total_inquiries'] ?? 0,
             $data['total_ratings'] ?? 0,
             $data['profile_views'] ?? 0,
@@ -653,18 +670,58 @@ class AnalyticsController extends Controller
     
     private function getContactsChartData(Supplier $supplier, Carbon $startDate, int $range): array
     {
-        // Get real daily contact requests from supplier_inquiries table
+        // Get real daily contacts (messages + inquiries + admin inquiries + reviews)
         $data = [];
+        $supplierId = $supplier->id;
         
         for ($i = 0; $i < $range; $i++) {
             $date = $startDate->copy()->addDays($i);
+            $dateStr = $date->format('Y-m-d');
             
-            // Count inquiries created on this date
-            $contactsCount = $supplier->inquiries()
-                ->whereDate('created_at', $date->format('Y-m-d'))
+            $totalContacts = 0;
+            
+            // 1. Supplier-to-Supplier Inquiries (only original inquiries, not replies)
+            $inquiries = \DB::table('supplier_to_supplier_inquiries')
+                ->where('receiver_supplier_id', $supplierId)
+                ->where('type', 'inquiry')
+                ->whereNull('parent_id')
+                ->whereDate('created_at', $dateStr)
                 ->count();
+            $totalContacts += $inquiries;
             
-            $data[] = $contactsCount;
+            // 2. Messages (only original messages, not replies)
+            $messages = \DB::table('messages')
+                ->where('receiver_supplier_id', $supplierId)
+                ->where('type', 'message')
+                ->whereNotExists(function($query) use ($supplierId) {
+                    $query->select('id')
+                        ->from('messages as original')
+                        ->whereColumn('messages.sender_supplier_id', 'original.receiver_supplier_id')
+                        ->whereColumn('messages.receiver_supplier_id', 'original.sender_supplier_id')
+                        ->where('original.type', 'message')
+                        ->where('original.sender_supplier_id', $supplierId);
+                })
+                ->whereDate('created_at', $dateStr)
+                ->count();
+            $totalContacts += $messages;
+            
+            // 3. Admin Inquiries (only original inquiries, not replies)
+            $adminInquiries = \DB::table('supplier_inquiries')
+                ->where('supplier_id', $supplierId)
+                ->where('from', 'admin')
+                ->whereDate('created_at', $dateStr)
+                ->count();
+            $totalContacts += $adminInquiries;
+            
+            // 4. Reviews/Ratings (only original reviews, not replies)
+            $reviews = \DB::table('supplier_ratings')
+                ->where('rated_supplier_id', $supplierId)
+                ->where('type', 'review')
+                ->whereDate('created_at', $dateStr)
+                ->count();
+            $totalContacts += $reviews;
+            
+            $data[] = $totalContacts;
         }
         
         return $data;
@@ -714,29 +771,151 @@ class AnalyticsController extends Controller
     }
     
     protected function computeResponseRate(Supplier $supplier): float
-    {$supplierId = $supplier->id;
-    
-    // Count inquiries received by this supplier
-    $inquiriesReceived = \DB::table('supplier_to_supplier_inquiries')
-        ->where('receiver_supplier_id', $supplierId)
-        ->where('type', 'inquiry')
-        ->count();
+    {
+        $supplierId = $supplier->id;
+        $totalReceived = 0;
+        $respondedCount = 0;
         
-    // Count replies sent by this supplier
-    $repliesSent = \DB::table('supplier_to_supplier_inquiries')
-        ->where('sender_supplier_id', $supplierId)
-        ->where('type', 'reply')
-        ->count();
-    
-    // If no inquiries, return 100%
-    if ($inquiriesReceived === 0) {
-        return 0;
+        // 1. Supplier-to-Supplier Inquiries
+        $totalInquiries = \DB::table('supplier_to_supplier_inquiries')
+            ->where('receiver_supplier_id', $supplierId)
+            ->where('type', 'inquiry')
+            ->whereNull('parent_id')
+            ->count();
+            
+        if ($totalInquiries > 0) {
+            $totalReceived += $totalInquiries;
+            $respondedInquiries = \DB::table('supplier_to_supplier_inquiries')
+                ->where('receiver_supplier_id', $supplierId)
+                ->where('type', 'inquiry')
+                ->whereNull('parent_id')
+                ->whereExists(function($query) use ($supplierId) {
+                    $query->select('id')
+                        ->from('supplier_to_supplier_inquiries as replies')
+                        ->whereColumn('replies.parent_id', 'supplier_to_supplier_inquiries.id')
+                        ->where('replies.sender_supplier_id', $supplierId)
+                        ->where('replies.type', 'reply');
+                })
+                ->count();
+            $respondedCount += $respondedInquiries;
+        }
+        
+        // 2. Messages
+        $totalMessages = \DB::table('messages')
+            ->where('receiver_supplier_id', $supplierId)
+            ->where('type', 'message')
+            ->count();
+
+        if ($totalMessages > 0) {
+            $totalReceived += $totalMessages;
+            $respondedMessages = \DB::table('messages')
+                ->where('receiver_supplier_id', $supplierId)
+                ->where('type', 'message')
+                ->whereExists(function($query) use ($supplierId) {
+                    $query->select('id')
+                        ->from('messages as replies')
+                        ->whereColumn('replies.sender_supplier_id', 'messages.receiver_supplier_id')
+                        ->whereColumn('replies.receiver_supplier_id', 'messages.sender_supplier_id')
+                        ->where('replies.type', 'message')
+                        ->where('replies.sender_supplier_id', $supplierId);
+                })
+                ->count();
+            $respondedCount += $respondedMessages;
+        }
+        
+        // 3. Admin Inquiries
+        $totalAdminInquiries = \DB::table('supplier_inquiries')
+            ->where('supplier_id', $supplierId)
+            ->count();
+
+        if ($totalAdminInquiries > 0) {
+            $totalReceived += $totalAdminInquiries;
+            $respondedAdminInquiries = \DB::table('supplier_inquiries')
+                ->where('supplier_id', $supplierId)
+                ->where('from', 'admin')
+                ->whereExists(function($query) use ($supplierId) {
+                    $query->select('id')
+                        ->from('supplier_inquiry_replies')
+                        ->whereColumn('supplier_inquiry_replies.inquiry_id', 'supplier_inquiries.id')
+                        ->where('supplier_inquiry_replies.supplier_id', $supplierId);
+                })
+                ->count();
+            $respondedCount += $respondedAdminInquiries;
+        }
+        
+        // 4. Reviews/Ratings
+        $totalRatings = \DB::table('supplier_ratings')
+            ->where('rated_supplier_id', $supplierId)
+            ->where('type', 'review')
+            ->count();
+
+        if ($totalRatings > 0) {
+            $totalReceived += $totalRatings;
+            $respondedRatings = \DB::table('supplier_ratings')
+                ->where('rated_supplier_id', $supplierId)
+                ->where('type', 'review')
+                ->whereExists(function($query) use ($supplierId) {
+                    $query->select('id')
+                        ->from('review_replies')
+                        ->whereColumn('review_replies.supplier_rating_id', 'supplier_ratings.id')
+                        ->where('review_replies.supplier_id', $supplierId);
+                })
+                ->count();
+            $respondedCount += $respondedRatings;
+        }
+
+        if ($totalReceived === 0) {
+            return 0.0;
+        }
+        
+        $rate = round(($respondedCount / $totalReceived) * 100, 1);
+        
+        return $rate;
     }
     
-    // Calculate response rate (capped at 100%)
-    $responseRate = min(($repliesSent / $inquiriesReceived) * 100, 100);
-    
-    return round($responseRate, 1);
+    protected function computeContacts(Supplier $supplier): int
+    {
+        $supplierId = $supplier->id;
+        $totalContacts = 0;
+        
+        // 1. Supplier-to-Supplier Inquiries (only original inquiries, not replies)
+        $inquiries = \DB::table('supplier_to_supplier_inquiries')
+            ->where('receiver_supplier_id', $supplierId)
+            ->where('type', 'inquiry')
+            ->whereNull('parent_id') // Only original inquiries
+            ->count();
+        $totalContacts += $inquiries;
+        
+        // 2. Messages (only original messages, not replies)
+        $messages = \DB::table('messages')
+            ->where('receiver_supplier_id', $supplierId)
+            ->where('type', 'message')
+            ->whereNotExists(function($query) use ($supplierId) {
+                $query->select('id')
+                    ->from('messages as original')
+                    ->whereColumn('messages.sender_supplier_id', 'original.receiver_supplier_id')
+                    ->whereColumn('messages.receiver_supplier_id', 'original.sender_supplier_id')
+                    ->where('original.type', 'message')
+                    ->where('original.sender_supplier_id', $supplierId);
+            })
+            ->count();
+        $totalContacts += $messages;
+        
+        // 3. Admin Inquiries (only original inquiries, not replies)
+        $adminInquiries = \DB::table('supplier_inquiries')
+            ->where('supplier_id', $supplierId)
+            ->where('from', 'admin')
+            ->count();
+        $totalContacts += $adminInquiries;
+        
+        // 4. Reviews/Ratings (only original reviews, not replies)
+        $reviews = \DB::table('supplier_ratings')
+            ->where('rated_supplier_id', $supplierId)
+            ->where('type', 'review')
+            ->count();
+        $totalContacts += $reviews;
+        
+        return $totalContacts;
     }
     
     protected function computeCustomerSatisfaction(Supplier $supplier): float
@@ -749,22 +928,26 @@ class AnalyticsController extends Controller
         return round($ratings->avg('score'), 1);
     }
     
-    protected function computeSearchVisibility(Supplier $supplier): float
+    protected function computeSearchVisibility(Supplier $supplier, int $range = 30): float
     {
-        // Base score from profile completion
-        $baseScore = 50;
+        // Get total searches in the specified range
+        $totalSearches = \DB::table('total_searches')
+            ->where('date', '>=', now()->subDays($range))
+            ->sum('search_count');
         
-        // Bonus for profile completion
-        $profileCompletion = $this->computeProfileCompletion($supplier);
-        $completionBonus = ($profileCompletion / 100) * 20;
+        // Get this supplier's appearances in the specified range
+        $supplierAppearances = \DB::table('search_visibility_logs')
+            ->where('supplier_id', $supplier->id)
+            ->where('date', '>=', now()->subDays($range))
+            ->sum('appearance_count');
         
-        // Bonus for recent activity
-        $recentActivity = 0;
-        $lastInquiry = $supplier->inquiries()->latest()->first();
-        if ($lastInquiry && $lastInquiry->created_at->diffInDays(now()) <= 30) {
-            $recentActivity = 10;
+        // Calculate visibility percentage
+        if ($totalSearches == 0) {
+            return 0.0;
         }
         
-        return round($baseScore + $completionBonus + $recentActivity, 2);
+        $visibilityPercentage = ($supplierAppearances / $totalSearches) * 100;
+        
+        return round($visibilityPercentage, 2);
     }
 }

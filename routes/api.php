@@ -192,6 +192,21 @@ Route::middleware('auth:sanctum')->group(function () {
             Route::post('/{id}/read', [\App\Http\Controllers\Api\Supplier\SupplierToSupplierInquiryController::class, 'markAsRead']);
         });
         
+        // Messages
+        Route::prefix('messages')->group(function () {
+            Route::get('/', [\App\Http\Controllers\Api\Supplier\MessageController::class, 'index']);
+            Route::post('/', [\App\Http\Controllers\Api\Supplier\MessageController::class, 'store']);
+            Route::get('/unread-count', [\App\Http\Controllers\Api\Supplier\MessageController::class, 'unreadCount']);
+            Route::post('/{message}/read', [\App\Http\Controllers\Api\Supplier\MessageController::class, 'markAsRead']);
+        });
+        
+        // Unified Inbox
+        Route::prefix('inbox')->group(function () {
+            Route::get('/', [\App\Http\Controllers\Api\Supplier\InboxController::class, 'index']);
+            Route::post('/mark-read', [\App\Http\Controllers\Api\Supplier\InboxController::class, 'markAsRead']);
+            Route::post('/reply', [\App\Http\Controllers\Api\Supplier\InboxController::class, 'reply']);
+        });
+        
         // Regular Inquiries (Old)
         Route::prefix('inquiries')->group(function () {
             Route::get('/', [SupplierInquiryController::class, 'index']);
@@ -258,6 +273,13 @@ Route::middleware('auth:sanctum')->group(function () {
         // Ratings
         Route::get('/ratings', [SupplierRatingController::class, 'index']);
         Route::post('/ratings', [SupplierRatingController::class, 'store']);
+        
+        // Review Replies
+        Route::prefix('ratings/{rating}/replies')->group(function () {
+            Route::post('/', [\App\Http\Controllers\Api\Supplier\ReviewReplyController::class, 'store']);
+            Route::put('/{reply}', [\App\Http\Controllers\Api\Supplier\ReviewReplyController::class, 'update']);
+            Route::delete('/{reply}', [\App\Http\Controllers\Api\Supplier\ReviewReplyController::class, 'destroy']);
+        });
         // Compliance Documents
         Route::get('/documents', [SupplierDocumentController::class, 'index']);
         Route::post('/documents', [SupplierDocumentController::class, 'store']);

@@ -19,10 +19,15 @@ class SupplierInquiry extends Model
         'is_read',
         'from',
         'admin_id',
+        'type',
     ];
 
     protected $casts = [
         'is_read' => 'boolean',
+    ];
+
+    protected $attributes = [
+        'type' => 'inquiry',
     ];
 
     public function supplier()

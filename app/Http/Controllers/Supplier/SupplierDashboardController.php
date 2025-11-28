@@ -473,8 +473,8 @@ class SupplierDashboardController extends Controller
         $inquiriesChange = $previousMonthInquiries > 1
             ? (($thisMonthInquiries - $previousMonthInquiries) / $previousMonthInquiries) * 100
             : ($thisMonthInquiries > 0 ? 80 : 0); // Show 80% growth for new inquiries
-        $pendingInquiries = $authUser->inquiries()->where('status', 'pending')->count();
-        $respondedInquiries = $authUser->inquiries()->where('status', 'responded')->count();
+        $pendingInquiries = $authUser->inquiries()->where('is_read', 0)->count();
+        $respondedInquiries = $authUser->inquiries()->where('is_read', 1)->count();
 
         // Ratings
         $allRatings = $authUser->approvedRatings();
@@ -577,32 +577,98 @@ class SupplierDashboardController extends Controller
 
     private function getContactRequests(Supplier $supplier): int
     {
-        // From supplier_inquiries where is_read = false (unread)
-        $regularInquiries = $supplier->inquiries()->where('is_read', false)->count();
+        $supplierId = $supplier->id;
+        $totalContacts = 0;
         
-        // From supplier_to_supplier_inquiries where is_read = false  
-        $supplierInquiries = $supplier->receivedSupplierInquiries()->where('is_read', false)->count();
+        // 1. Supplier-to-Supplier Inquiries (only original inquiries, not replies)
+        $inquiries = \DB::table('supplier_to_supplier_inquiries')
+            ->where('receiver_supplier_id', $supplierId)
+            ->where('type', 'inquiry')
+            ->whereNull('parent_id') // Only original inquiries
+            ->count();
+        $totalContacts += $inquiries;
         
-        return $regularInquiries + $supplierInquiries;
+        // 2. Messages (only original messages, not replies)
+        $messages = \DB::table('messages')
+            ->where('receiver_supplier_id', $supplierId)
+            ->where('type', 'message')
+            ->whereNotExists(function($query) use ($supplierId) {
+                $query->select('id')
+                    ->from('messages as original')
+                    ->whereColumn('messages.sender_supplier_id', 'original.receiver_supplier_id')
+                    ->whereColumn('messages.receiver_supplier_id', 'original.sender_supplier_id')
+                    ->where('original.type', 'message')
+                    ->where('original.sender_supplier_id', $supplierId);
+            })
+            ->count();
+        $totalContacts += $messages;
+        
+        // 3. Admin Inquiries (only original inquiries, not replies)
+        $adminInquiries = \DB::table('supplier_inquiries')
+            ->where('supplier_id', $supplierId)
+            ->where('from', 'admin')
+            ->count();
+        $totalContacts += $adminInquiries;
+        
+        // 4. Reviews/Ratings (only original reviews, not replies)
+        $reviews = \DB::table('supplier_ratings')
+            ->where('rated_supplier_id', $supplierId)
+            ->where('type', 'review')
+            ->count();
+        $totalContacts += $reviews;
+        
+        return $totalContacts;
     }
 
     private function getPreviousPeriodContactRequests(Supplier $supplier, Carbon $rangeStart): int
     {
-        // Previous period regular inquiries
-        $previousRegular = $supplier->inquiries()
-            ->where('created_at', '<', $rangeStart)
-            ->where('created_at', '>=', $rangeStart->copy()->subDays($rangeStart->diffInDays(now())))
-            ->where('is_read', false)
+        $supplierId = $supplier->id;
+        $previousStart = $rangeStart->copy()->subDays($rangeStart->diffInDays(now()));
+        $previousEnd = $rangeStart->copy()->subDay();
+        $totalContacts = 0;
+        
+        // 1. Supplier-to-Supplier Inquiries (only original inquiries, not replies)
+        $inquiries = \DB::table('supplier_to_supplier_inquiries')
+            ->where('receiver_supplier_id', $supplierId)
+            ->where('type', 'inquiry')
+            ->whereNull('parent_id') // Only original inquiries
+            ->whereBetween('created_at', [$previousStart, $previousEnd])
             ->count();
-
-        // Previous period supplier inquiries
-        $previousSupplier = $supplier->receivedSupplierInquiries()
-            ->where('created_at', '<', $rangeStart)
-            ->where('created_at', '>=', $rangeStart->copy()->subDays($rangeStart->diffInDays(now())))
-            ->where('is_read', false)
+        $totalContacts += $inquiries;
+        
+        // 2. Messages (only original messages, not replies)
+        $messages = \DB::table('messages')
+            ->where('receiver_supplier_id', $supplierId)
+            ->where('type', 'message')
+            ->whereNotExists(function($query) use ($supplierId) {
+                $query->select('id')
+                    ->from('messages as original')
+                    ->whereColumn('messages.sender_supplier_id', 'original.receiver_supplier_id')
+                    ->whereColumn('messages.receiver_supplier_id', 'original.sender_supplier_id')
+                    ->where('original.type', 'message')
+                    ->where('original.sender_supplier_id', $supplierId);
+            })
+            ->whereBetween('created_at', [$previousStart, $previousEnd])
             ->count();
-
-        return $previousRegular + $previousSupplier;
+        $totalContacts += $messages;
+        
+        // 3. Admin Inquiries (only original inquiries, not replies)
+        $adminInquiries = \DB::table('supplier_inquiries')
+            ->where('supplier_id', $supplierId)
+            ->where('from', 'admin')
+            ->whereBetween('created_at', [$previousStart, $previousEnd])
+            ->count();
+        $totalContacts += $adminInquiries;
+        
+        // 4. Reviews/Ratings (only original reviews, not replies)
+        $reviews = \DB::table('supplier_ratings')
+            ->where('rated_supplier_id', $supplierId)
+            ->where('type', 'review')
+            ->whereBetween('created_at', [$previousStart, $previousEnd])
+            ->count();
+        $totalContacts += $reviews;
+        
+        return $totalContacts;
     }
 
     private function getPreviousPeriodBusinessInquiries(Supplier $supplier, Carbon $rangeStart): int

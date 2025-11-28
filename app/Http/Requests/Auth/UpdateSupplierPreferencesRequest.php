@@ -38,7 +38,6 @@ class UpdateSupplierPreferencesRequest extends FormRequest
                 'sometimes',
                 'string',
                 'max:20',
-                Rule::unique('suppliers', 'phone')->ignore($userId)
             ],
             'businessName' => ['sometimes', 'string', 'max:255'],
             

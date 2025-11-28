@@ -41,20 +41,34 @@ class SupplierToSupplierInquiryController extends Controller
     }
     
     /**
-     * Get all supplier-to-supplier inquiries
+     * Get all supplier-to-supplier inquiries (both sent and received)
      */
     public function index(): JsonResponse
     {
         $supplier = Auth::user();
         
-        // Get only inquiries where the authenticated user is the receiver
-        $inquiries = SupplierToSupplierInquiry::with(['sender', 'receiver', 'replies'])
-            ->where('receiver_supplier_id', $supplier->id)
+        // Get all inquiries where the authenticated user is either sender or receiver
+        $inquiries = SupplierToSupplierInquiry::with(['sender', 'receiver'])
+            ->where(function($query) use ($supplier) {
+                $query->where('sender_supplier_id', $supplier->id)
+                      ->orWhere('receiver_supplier_id', $supplier->id);
+            })
             ->latest()
             ->get();
 
+        // Calculate statistics
+        $unreadCount = SupplierToSupplierInquiry::where('receiver_supplier_id', $supplier->id)
+            ->where('is_read', false)
+            ->count();
+
+        $avgResponseTime = $this->calculateAverageResponseTime($supplier->id);
+        $responseRate = $this->calculateResponseRate($supplier->id);
+
         return response()->json([
             'data' => SupplierInquiryResource::collection($inquiries),
+            'unread_messages' => $unreadCount,
+            'avg_response_time' => $avgResponseTime,
+            'response_rate' => $responseRate,
         ]);
     }
 
@@ -184,5 +198,80 @@ class SupplierToSupplierInquiryController extends Controller
             ->count();
             
         return response()->json(['unread_count' => $count]);
+    }
+
+    /**
+     * Calculate average response time for a supplier
+     */
+    private function calculateAverageResponseTime($supplierId): string
+    {
+        // Get all inquiries received by this supplier
+        $receivedInquiries = SupplierToSupplierInquiry::where('receiver_supplier_id', $supplierId)
+            ->where('type', 'inquiry')
+            ->whereNull('parent_id')
+            ->get();
+
+        if ($receivedInquiries->isEmpty()) {
+            return '0 hours';
+        }
+
+        $totalResponseTime = 0;
+        $responsesCount = 0;
+
+        foreach ($receivedInquiries as $inquiry) {
+            // Find the first reply to this inquiry
+            $reply = SupplierToSupplierInquiry::where('parent_id', $inquiry->id)
+                ->where('sender_supplier_id', $supplierId)
+                ->first();
+
+            if ($reply) {
+                $responseTime = $inquiry->created_at->diffInHours($reply->created_at);
+                $totalResponseTime += $responseTime;
+                $responsesCount++;
+            }
+        }
+
+        if ($responsesCount === 0) {
+            return '0 hours';
+        }
+
+        $avgHours = round($totalResponseTime / $responsesCount, 1);
+        
+        if ($avgHours < 1) {
+            return round($avgHours * 60) . ' minutes';
+        } elseif ($avgHours >= 24) {
+            return round($avgHours / 24, 1) . ' days';
+        } else {
+            return $avgHours . ' hours';
+        }
+    }
+
+    /**
+     * Calculate response rate for a supplier
+     */
+    private function calculateResponseRate($supplierId): string
+    {
+        // Get all inquiries received by this supplier
+        $totalInquiries = SupplierToSupplierInquiry::where('receiver_supplier_id', $supplierId)
+            ->where('type', 'inquiry')
+            ->whereNull('parent_id')
+            ->count();
+
+        if ($totalInquiries === 0) {
+            return '0%';
+        }
+
+        // Count inquiries that have received a reply
+        $respondedInquiries = SupplierToSupplierInquiry::where('receiver_supplier_id', $supplierId)
+            ->where('type', 'inquiry')
+            ->whereNull('parent_id')
+            ->whereHas('replies', function($query) use ($supplierId) {
+                $query->where('sender_supplier_id', $supplierId);
+            })
+            ->count();
+
+        $rate = round(($respondedInquiries / $totalInquiries) * 100, 1);
+        
+        return $rate . '%';
     }
 }

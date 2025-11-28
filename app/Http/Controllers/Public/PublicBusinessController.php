@@ -140,6 +140,9 @@ private function isOpenNow($hours, string $day, string $now)
             $suppliers->where('id', '!=', auth()->id());
         }
 
+        // Exclude suppliers who don't allow search engine indexing
+        $suppliers->where('allow_search_engine_indexing', true);
+
         // Handle AI parameter
         if ($aiPrompt = $request->input('ai')) {
             $suppliers = $this->applyAIFilters($suppliers, $aiPrompt);
@@ -152,6 +155,34 @@ private function isOpenNow($hours, string $day, string $now)
         $paginator = $suppliers->paginate($perPage)->appends($request->query());
 
         $data = $paginator->getCollection()->map(fn (Supplier $supplier) => (new SupplierSummaryResource($supplier))->toArray(request()));
+
+        // Log each supplier that appeared in results
+        $appearedSuppliers = $paginator->getCollection()->pluck('id');
+        $today = now()->toDateString();
+        
+        // Log total searches for today
+        \DB::table('total_searches')
+        ->updateOrInsert(
+            ['date' => $today],
+            [
+                'search_count' => \DB::raw('search_count + 1'),
+                'updated_at' => now()
+                ]
+            );
+            if ($appearedSuppliers->isNotEmpty()) {
+            
+            // Log each supplier appearance
+            foreach ($appearedSuppliers as $supplierId) {
+                \DB::table('search_visibility_logs')
+                    ->updateOrInsert(
+                        ['supplier_id' => $supplierId, 'date' => $today],
+                        [
+                            'appearance_count' => \DB::raw('appearance_count + 1'),
+                            'updated_at' => now()
+                        ]
+                    );
+            }
+        }
 
         // Get available filters for response
         $availableCategories = Supplier::whereHas('profile', function (Builder $q) {
