@@ -575,12 +575,10 @@ class InboxController extends Controller
 
         if ($totalAdminInquiries > 0) {
             $totalReceived += $totalAdminInquiries;
-            // For admin inquiries, count those that have been replied to
+            // For admin inquiries, count those that have been responded to (have admin_id)
             $respondedAdminInquiries = SupplierInquiry::where('supplier_id', $supplierId)
                 ->where('from', 'admin')
-                ->whereHas('replies', function($query) use ($supplierId) {
-                    $query->where('supplier_id', $supplierId);
-                })
+                ->whereNotNull('admin_id')
                 ->count();
             $respondedCount += $respondedAdminInquiries;
         }
