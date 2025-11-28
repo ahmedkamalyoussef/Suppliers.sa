@@ -44,6 +44,14 @@ class SupplierSummaryResource extends JsonResource
             'contactEmail' => $profile?->contact_email,
             'services' => $this->formatServices($profile?->services_offered),
             'targetMarket' => $this->formatTargetMarket($profile?->target_market),
+            'preferences' => [
+                'marketing_emails' => $supplier->marketing_emails ?? false,
+                'profile_visibility' => $supplier->profile_visibility ?? 'public',
+                'show_email_publicly' => $supplier->show_email_publicly ?? false,
+                'show_phone_publicly' => $supplier->show_phone_publicly ?? false,
+                'allow_direct_contact' => $supplier->allow_direct_contact ?? true,
+                'allow_search_engine_indexing' => $supplier->allow_search_engine_indexing ?? true
+            ],
         ], function ($value) {
             return $value !== null;
         });

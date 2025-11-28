@@ -152,7 +152,9 @@ class SupplierController extends Controller
             'profile',
             'services',
             'ratingsReceived.rater',
+            'ratingsReceived.reply',
             'approvedRatings',
+            'approvedRatings.reply',
             'certifications',
             'productImages',
             'products'
@@ -202,7 +204,13 @@ class SupplierController extends Controller
                         'created_at' => $review->created_at->toDateTimeString(),
                         'user' => [
                             'name' => $review->rater->name ?? null,
-                        ]
+                        ],
+                        'reply' => $review->reply ? [
+                            'id' => $review->reply->id,
+                            'reply' => $review->reply->reply,
+                            'type' => $review->reply->type,
+                            'created_at' => $review->reply->created_at->toDateTimeString()
+                        ] : null
                     ];
                 })
             ],

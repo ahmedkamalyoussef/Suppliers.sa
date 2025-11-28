@@ -90,14 +90,12 @@ Route::prefix('supplier')->group(function () {
 // Public super admin bootstrap: allowed only if no super admin exists (enforced in controller)
 Route::post('/admins/register-super', [AdminController::class, 'registerSuper']);
 
+// Public business endpoint
+Route::get('/suppliers/{id}/business', 'App\\Http\\Controllers\\SupplierController@getSupplierBusiness');
+
 Route::middleware('auth:sanctum')->group(function () {
-    // Get supplier business with products
-    Route::get('/suppliers/{id}/business', 'App\\Http\\Controllers\\SupplierController@getSupplierBusiness');
-
-    // Protected supplier profile endpoint
+    // Protected supplier profile endpoint (only owner can view)
     Route::get('/suppliers/{id}', 'App\\Http\\Controllers\\Public\\SupplierProfileController@show');
-
-    // Shared
     Route::post('/auth/logout', [AuthController::class, 'logout']);
     Route::post('/auth/change-password', [PasswordController::class, 'change-password']);
 

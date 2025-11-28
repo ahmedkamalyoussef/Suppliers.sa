@@ -19,6 +19,22 @@ class SupplierProfileController extends Controller
             'productImages'
         ])->findOrFail($id);
 
+        // Check profile visibility
+        if ($supplier->profile_visibility === 'limited' && !auth()->check()) {
+            return response()->json([
+                'message' => 'This profile is not publicly available',
+                'status' => 'restricted'
+            ], 403);
+        }
+
+        // Authorization check - only owner can view their own profile
+        if (auth()->check() && auth()->id() != $supplier->id) {
+            return response()->json([
+                'message' => 'You are not authorized to view this profile',
+                'status' => 'unauthorized'
+            ], 403);
+        }
+
         return response()->json([
             'id' => $supplier->id,
             'name' => $supplier->name,
@@ -61,7 +77,13 @@ class SupplierProfileController extends Controller
                         'user' => [
                             'name' => $review->rater?->name ?? null,
                             'avatar' => ($review->rater && $review->rater->profile_image) ? asset($review->rater->profile_image) : null
-                        ]
+                        ],
+                        'reply' => $review->reply ? [
+                            'id' => $review->reply->id,
+                            'reply' => $review->reply->reply,
+                            'type' => $review->reply->type,
+                            'created_at' => $review->reply->created_at->toDateTimeString()
+                        ] : null
                     ];
                 })
             ],
@@ -85,7 +107,15 @@ class SupplierProfileController extends Controller
                     'id' => $service->id,
                     'service_name' => $service->service_name
                 ];
-            })
+            }),
+            'preferences' => [
+                'marketing_emails' => $supplier->marketing_emails ?? false,
+                'profile_visibility' => $supplier->profile_visibility ?? 'public',
+                'show_email_publicly' => $supplier->show_email_publicly ?? false,
+                'show_phone_publicly' => $supplier->show_phone_publicly ?? false,
+                'allow_direct_contact' => $supplier->allow_direct_contact ?? true,
+                'allow_search_engine_indexing' => $supplier->allow_search_engine_indexing ?? true
+            ]
         ]);
     }
 }

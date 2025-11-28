@@ -205,23 +205,24 @@ abstract class Controller extends BaseController
 
     protected function transformInquiry(SupplierInquiry $inquiry): array
     {
-        $inquiry->loadMissing('handledBy');
+        $inquiry->loadMissing('admin');
 
         return array_filter([
             'id' => $inquiry->id,
-            'from' => $inquiry->name,
-            'company' => $inquiry->company,
+            'from' => $inquiry->full_name,
             'subject' => $inquiry->subject,
             'message' => $inquiry->message,
-            'contact' => $inquiry->email,
-            'phone' => $inquiry->phone,
-            'status' => $inquiry->status,
-            'isUnread' => (bool) $inquiry->is_unread,
-            'lastResponse' => $inquiry->last_response,
-            'lastResponseAt' => optional($inquiry->last_response_at)->toIso8601String(),
-            'handledBy' => $inquiry->handledBy ? $this->transformAdmin($inquiry->handledBy) : null,
-            'handledAt' => optional($inquiry->handled_at)->toIso8601String(),
+            'contact' => $inquiry->email_address,
+            'phone' => $inquiry->phone_number,
+            'type' => $inquiry->type,
+            'from_source' => $inquiry->from,
+            'isRead' => (bool) $inquiry->is_read,
+            'handledBy' => $inquiry->admin ? [
+                'id' => $inquiry->admin->id,
+                'name' => $inquiry->admin->name,
+            ] : null,
             'receivedAt' => optional($inquiry->created_at)->toIso8601String(),
+            'updatedAt' => optional($inquiry->updated_at)->toIso8601String(),
         ], function ($value) {
             return $value !== null;
         });

@@ -148,4 +148,35 @@ class SupplierInquiryController extends Controller
 
         return $authUser;
     }
+
+    public function store(Request $request): JsonResponse
+    {
+        $supplier = $this->resolveSupplier($request);
+
+        $validated = $request->validate([
+            'name' => 'required|string|max:255',
+            'email' => 'nullable|email|max:255',
+            'phone' => 'nullable|string|max:20',
+            'company' => 'nullable|string|max:255',
+            'subject' => 'nullable|string|max:255',
+            'message' => 'required|string',
+        ]);
+
+        $inquiry = SupplierInquiry::create([
+            'full_name' => $validated['name'],
+            'email_address' => $validated['email'],
+            'phone_number' => $validated['phone'],
+            'subject' => $validated['subject'],
+            'message' => $validated['message'],
+            'type' => 'inquiry',
+            'is_read' => false,
+            'from' => 'admin',
+            'supplier_id' => $supplier->id,
+        ]);
+
+        return response()->json([
+            'message' => 'Inquiry created successfully.',
+            'data' => $this->transformInquiry($inquiry),
+        ], 201);
+    }
 }
