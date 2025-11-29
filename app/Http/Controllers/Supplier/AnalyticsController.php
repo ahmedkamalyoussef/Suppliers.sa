@@ -833,12 +833,8 @@ class AnalyticsController extends Controller
             $respondedAdminInquiries = \DB::table('supplier_inquiries')
                 ->where('supplier_id', $supplierId)
                 ->where('from', 'admin')
-                ->whereExists(function($query) use ($supplierId) {
-                    $query->select('id')
-                        ->from('supplier_inquiry_replies')
-                        ->whereColumn('supplier_inquiry_replies.inquiry_id', 'supplier_inquiries.id')
-                        ->where('supplier_inquiry_replies.supplier_id', $supplierId);
-                })
+                ->whereNotNull('admin_response')
+                ->whereNotNull('admin_responded_at')
                 ->count();
             $respondedCount += $respondedAdminInquiries;
         }

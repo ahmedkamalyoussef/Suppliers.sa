@@ -34,7 +34,7 @@ class AdminController extends Controller
             }
 
             // Allow any authenticated admin to access own profile endpoints
-            $selfAllowed = in_array($action, ['updateProfile', 'updateProfileImage'], true);
+            $selfAllowed = in_array($action, ['updateProfile', 'updateProfileImage', 'getPermissions'], true);
 
             if (! $selfAllowed) {
                 // Only super admins can access management routes
@@ -56,7 +56,10 @@ class AdminController extends Controller
      */
     public function index()
     {
-        $admins = Admin::with('permissions')->get()->map(fn (Admin $admin) => $this->transformAdmin($admin));
+        $admins = Admin::with('permissions')
+            ->where('role', '!=', 'super_admin')
+            ->get()
+            ->map(fn (Admin $admin) => $this->transformAdmin($admin));
 
         return response()->json(['admins' => $admins]);
     }
@@ -80,14 +83,10 @@ class AdminController extends Controller
             $request->merge(['job_role' => $request->input('jobRole')]);
         }
 
-        if (! $request->has('password_confirmation') && $request->filled('passwordConfirmation')) {
-            $request->merge(['password_confirmation' => $request->input('passwordConfirmation')]);
-        }
-
         $validator = Validator::make($request->all(), [
             'name' => 'required|string|max:255',
             'email' => 'required|string|email|max:255|unique:admins,email',
-            'password' => 'nullable|string|min:8|confirmed',
+            'password' => 'nullable|string|min:8',
             'role' => 'required|in:admin,super_admin',
             'department' => 'nullable|string|max:255',
             'job_role' => 'nullable|string|max:255',
@@ -128,9 +127,7 @@ class AdminController extends Controller
         $admin->load('permissions');
 
         return response()->json([
-            'message' => 'Admin created successfully',
-            'admin' => $this->transformAdmin($admin),
-            'generatedPassword' => $request->filled('password') ? null : $password,
+            'message' => 'Admin created successfully'
         ], 201);
     }
 
@@ -152,7 +149,7 @@ class AdminController extends Controller
         $validator = Validator::make($request->all(), [
             'name' => 'sometimes|string|max:255',
             'email' => 'sometimes|string|email|max:255|unique:admins,email,'.$id,
-            'password' => 'nullable|string|min:8|confirmed',
+            'password' => 'nullable|string|min:8',
             'role' => 'sometimes|in:admin,super_admin',
             'department' => 'nullable|string|max:255',
             'job_role' => 'nullable|string|max:255',
@@ -211,8 +208,7 @@ class AdminController extends Controller
         $admin->load('permissions');
 
         return response()->json([
-            'message' => 'Admin updated successfully',
-            'admin' => $this->transformAdmin($admin),
+            'message' => 'Admin updated successfully'
         ]);
     }
 
@@ -469,5 +465,94 @@ class AdminController extends Controller
             'system_backups' => (bool) data_get($permissions, 'system.backups', false),
             'support_manage' => (bool) data_get($permissions, 'support.manage', false),
         ];
+    }
+
+    /**
+     * Transform admin data for API response
+     */
+    protected function transformAdmin(Admin $admin): array
+    {
+        return [
+            'id' => $admin->id,
+            'name' => $admin->name,
+            'email' => $admin->email,
+            'role' => $admin->role,
+            'department' => $admin->department,
+            'job_role' => $admin->job_role,
+            'profile_image' => $admin->profile_image,
+            'status' => $admin->status,
+            'last_login_at' => $admin->last_login_at?->format('Y-m-d H:i:s'),
+            'created_at' => $admin->created_at->format('Y-m-d H:i:s'),
+            'updated_at' => $admin->updated_at->format('Y-m-d H:i:s'),
+            'permissions' => $admin->permissions ? [
+                'user_management_view' => (bool) $admin->permissions->user_management_view,
+                'user_management_edit' => (bool) $admin->permissions->user_management_edit,
+                'user_management_delete' => (bool) $admin->permissions->user_management_delete,
+                'user_management_full' => (bool) $admin->permissions->user_management_full,
+                'content_management_view' => (bool) $admin->permissions->content_management_view,
+                'content_management_supervise' => (bool) $admin->permissions->content_management_supervise,
+                'content_management_delete' => (bool) $admin->permissions->content_management_delete,
+                'analytics_view' => (bool) $admin->permissions->analytics_view,
+                'analytics_export' => (bool) $admin->permissions->analytics_export,
+                'reports_view' => (bool) $admin->permissions->reports_view,
+                'reports_create' => (bool) $admin->permissions->reports_create,
+                'system_manage' => (bool) $admin->permissions->system_manage,
+                'system_settings' => (bool) $admin->permissions->system_settings,
+                'system_backups' => (bool) $admin->permissions->system_backups,
+                'support_manage' => (bool) $admin->permissions->support_manage,
+            ] : null,
+        ];
+    }
+
+    /**
+     * Get current admin's permissions
+     */
+    public function getPermissions(Request $request)
+    {
+        $admin = $request->user();
+        
+        if (!($admin instanceof Admin)) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
+        // Load permissions relationship
+        $admin->load('permissions');
+        
+        // Get permissions from database for the logged in admin
+        $permissions = $admin->permissions ? [
+            'user_management_view' => (bool) $admin->permissions->user_management_view,
+            'user_management_edit' => (bool) $admin->permissions->user_management_edit,
+            'user_management_delete' => (bool) $admin->permissions->user_management_delete,
+            'user_management_full' => (bool) $admin->permissions->user_management_full,
+            'content_management_view' => (bool) $admin->permissions->content_management_view,
+            'content_management_supervise' => (bool) $admin->permissions->content_management_supervise,
+            'content_management_delete' => (bool) $admin->permissions->content_management_delete,
+            'analytics_view' => (bool) $admin->permissions->analytics_view,
+            'analytics_export' => (bool) $admin->permissions->analytics_export,
+            'reports_view' => (bool) $admin->permissions->reports_view,
+            'reports_create' => (bool) $admin->permissions->reports_create,
+            'system_manage' => (bool) $admin->permissions->system_manage,
+            'system_settings' => (bool) $admin->permissions->system_settings,
+            'system_backups' => (bool) $admin->permissions->system_backups,
+            'support_manage' => (bool) $admin->permissions->support_manage,
+        ] : [
+            'user_management_view' => false,
+            'user_management_edit' => false,
+            'user_management_delete' => false,
+            'user_management_full' => false,
+            'content_management_view' => false,
+            'content_management_supervise' => false,
+            'content_management_delete' => false,
+            'analytics_view' => false,
+            'analytics_export' => false,
+            'reports_view' => false,
+            'reports_create' => false,
+            'system_manage' => false,
+            'system_settings' => false,
+            'system_backups' => false,
+            'support_manage' => false,
+        ];
+
+        return response()->json(['permissions' => $permissions]);
     }
 }
