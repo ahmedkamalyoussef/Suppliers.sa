@@ -1,14 +1,14 @@
 <?php
 
 use App\Http\Controllers\Admin\AdminContentController;
-use App\Http\Controllers\Admin\AdminContentReportController;
-use App\Http\Controllers\Admin\AdminController;
-use App\Http\Controllers\Admin\AdminDashboardController;
-use App\Http\Controllers\Admin\AdminDocumentController;
 use App\Http\Controllers\Admin\AdminRatingController;
 use App\Http\Controllers\Admin\AdminSupplierController;
+use App\Http\Controllers\Admin\AdminDashboardController;
+use App\Http\Controllers\Admin\AdminDocumentController;
+use App\Http\Controllers\Admin\AdminContentReportController;
+use App\Http\Controllers\Admin\AdminController;
 use App\Http\Controllers\Auth\AuthController;
-use App\Http\Controllers\Auth\PasswordController;
+use App\Http\Controllers\Supplier\SupplierInquiryController;
 use App\Http\Controllers\Auth\SupplierAuthController;
 use App\Http\Controllers\Public\PublicBusinessController;
 use App\Http\Controllers\Public\PublicBusinessInquiryController;
@@ -28,12 +28,12 @@ use App\Http\Controllers\Shared\UserController;
 use App\Http\Controllers\Supplier\SupplierContentReportController;
 use App\Http\Controllers\Supplier\SupplierDashboardController;
 use App\Http\Controllers\Supplier\SupplierDocumentController;
-use App\Http\Controllers\Supplier\SupplierInquiryController;
 use App\Http\Controllers\Supplier\SupplierRatingController;
 use App\Http\Controllers\Supplier\ProductImageController;
 use App\Http\Controllers\Supplier\ServiceController;
 use App\Http\Controllers\Supplier\SupplierProductController;
 use App\Http\Controllers\Supplier\CertificationController;
+use App\Http\Controllers\Api\Supplier\BusinessRequestController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -147,6 +147,14 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/reports/{report}/dismiss', [AdminContentReportController::class, 'dismiss']);
         Route::post('/reports/{report}/takedown', [AdminContentReportController::class, 'takedown']);
         Route::post('/reports/{report}/status', [AdminContentReportController::class, 'updateStatus']);
+        
+        // Admin Supplier Inquiries
+        Route::get('/inquiries', [SupplierInquiryController::class, 'index']);
+        Route::get('/inquiries/{inquiry}', [SupplierInquiryController::class, 'show']);
+        Route::post('/inquiries/{inquiry}/reply', [SupplierInquiryController::class, 'reply']);
+        Route::post('/inquiries/{inquiry}/read', [SupplierInquiryController::class, 'markRead']);
+        Route::put('/inquiries/{inquiry}/status', [SupplierInquiryController::class, 'updateStatus']);
+        Route::get('/inquiries/unread/count', [SupplierInquiryController::class, 'unreadCount']);
     });
 
     // Admin Management (Super Admin Only)
@@ -203,6 +211,11 @@ Route::middleware('auth:sanctum')->group(function () {
             Route::get('/', [\App\Http\Controllers\Api\Supplier\InboxController::class, 'index']);
             Route::post('/mark-read', [\App\Http\Controllers\Api\Supplier\InboxController::class, 'markAsRead']);
             Route::post('/reply', [\App\Http\Controllers\Api\Supplier\InboxController::class, 'reply']);
+        });
+        
+        // Business Requests
+        Route::prefix('business-requests')->group(function () {
+            Route::post('/', [\App\Http\Controllers\Api\Supplier\BusinessRequestController::class, 'store']);
         });
         
         // Regular Inquiries (Old)

@@ -68,7 +68,6 @@ class SupplierResource extends JsonResource
                 return [
                     'id' => $image->id,
                     'image_url' => $image->image_url,
-                    'sort_order' => $image->sort_order,
                     'created_at' => $image->created_at->toIso8601String(),
                     'updated_at' => $image->updated_at->toIso8601String(),
                 ];
@@ -77,8 +76,6 @@ class SupplierResource extends JsonResource
                 return [
                     'id' => $service->id,
                     'service_name' => $service->service_name,
-                    'description' => $service->description,
-                    'sort_order' => $service->sort_order,
                     'created_at' => $service->created_at->toIso8601String(),
                     'updated_at' => $service->updated_at->toIso8601String(),
                 ];
@@ -87,14 +84,6 @@ class SupplierResource extends JsonResource
                 return [
                     'id' => $cert->id,
                     'certification_name' => $cert->certification_name,
-                    'issuing_organization' => $cert->issuing_organization,
-                    'issue_date' => $cert->issue_date ? $cert->issue_date->format('Y-m-d') : null,
-                    'expiry_date' => $cert->expiry_date ? $cert->expiry_date->format('Y-m-d') : null,
-                    'certificate_number' => $cert->certificate_number,
-                    'certificate_url' => $cert->certificate_url,
-                    'description' => $cert->description,
-                    'sort_order' => $cert->sort_order,
-                    'is_expired' => $cert->is_expired,
                     'created_at' => $cert->created_at->toIso8601String(),
                     'updated_at' => $cert->updated_at->toIso8601String(),
                 ];

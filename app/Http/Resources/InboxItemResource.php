@@ -164,15 +164,12 @@ class InboxItemResource extends JsonResource
             case 'supplier_inquiry':
                 return [
                     'id' => $this->supplier->id ?? null,
-                    'name' => $this->supplier->name ?? 'Admin',
+                    'name' => $this->full_name ?? 'Admin',
                 ];
             case 'supplier_to_supplier_inquiry':
-                if (!$this->sender) {
-                    return ['id' => null, 'name' => 'Unknown'];
-                }
                 return [
-                    'id' => $this->sender->id,
-                    'name' => $this->sender->name ?? 'Unknown',
+                    'id' => $this->sender_supplier_id,
+                    'name' => $this->sender_name ?? 'Unknown',
                 ];
             case 'message':
                 if (!$this->sender) {

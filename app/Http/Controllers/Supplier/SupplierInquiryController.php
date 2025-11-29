@@ -13,9 +13,14 @@ class SupplierInquiryController extends Controller
 {
     public function index(Request $request): JsonResponse
     {
-        $supplier = $this->resolveSupplier($request);
+        $user = $this->resolveUser($request);
 
-        $query = $supplier->inquiries()->latest();
+        if ($user instanceof Supplier) {
+            $query = $user->inquiries()->latest();
+        } else {
+            // Admin can see all inquiries
+            $query = SupplierInquiry::latest();
+        }
 
         if ($status = $request->query('status')) {
             $query->where('status', $status);
@@ -55,9 +60,9 @@ class SupplierInquiryController extends Controller
 
     public function show(Request $request, SupplierInquiry $inquiry): JsonResponse
     {
-        $supplier = $this->resolveSupplier($request);
+        $user = $this->resolveUser($request);
 
-        if ($inquiry->supplier_id !== $supplier->id) {
+        if ($user instanceof Supplier && $inquiry->supplier_id !== $user->id) {
             abort(404);
         }
 
@@ -68,9 +73,9 @@ class SupplierInquiryController extends Controller
 
     public function markRead(Request $request, SupplierInquiry $inquiry): JsonResponse
     {
-        $supplier = $this->resolveSupplier($request);
+        $user = $this->resolveUser($request);
 
-        if ($inquiry->supplier_id !== $supplier->id) {
+        if ($user instanceof Supplier && $inquiry->supplier_id !== $user->id) {
             abort(404);
         }
 
@@ -86,9 +91,9 @@ class SupplierInquiryController extends Controller
 
     public function updateStatus(Request $request, SupplierInquiry $inquiry): JsonResponse
     {
-        $supplier = $this->resolveSupplier($request);
+        $user = $this->resolveUser($request);
 
-        if ($inquiry->supplier_id !== $supplier->id) {
+        if ($user instanceof Supplier && $inquiry->supplier_id !== $user->id) {
             abort(404);
         }
 
@@ -107,9 +112,9 @@ class SupplierInquiryController extends Controller
 
     public function reply(Request $request, SupplierInquiry $inquiry): JsonResponse
     {
-        $supplier = $this->resolveSupplier($request);
+        $user = $this->resolveUser($request);
 
-        if ($inquiry->supplier_id !== $supplier->id) {
+        if ($user instanceof Supplier && $inquiry->supplier_id !== $user->id) {
             abort(404);
         }
 
@@ -118,12 +123,13 @@ class SupplierInquiryController extends Controller
             'subject' => 'nullable|string|max:255',
         ]);
 
-        $inquiry->forceFill([
-            'last_response' => $validated['message'],
-            'last_response_at' => now(),
-            'status' => $inquiry->status === 'closed' ? 'closed' : 'responded',
-            'is_unread' => false,
-        ])->save();
+        // Update the inquiry with admin response
+        $inquiry->update([
+            'admin_id' => $user instanceof \App\Models\Admin ? $user->id : null,
+            'admin_response' => $validated['message'],
+            'admin_responded_at' => now(),
+            'is_read' => true,
+        ]);
 
         // Update subject if provided
         if (isset($validated['subject'])) {
@@ -137,13 +143,13 @@ class SupplierInquiryController extends Controller
         ]);
     }
 
-    private function resolveSupplier(Request $request): Supplier
+    private function resolveUser(Request $request)
     {
         /** @var \Illuminate\Contracts\Auth\Authenticatable|null $authUser */
         $authUser = $request->user();
 
-        if (! $authUser instanceof Supplier) {
-            abort(403, 'Only suppliers can manage inquiries.');
+        if (! $authUser instanceof Supplier && ! $authUser instanceof \App\Models\Admin) {
+            abort(403, 'Only suppliers and admins can manage inquiries.');
         }
 
         return $authUser;
@@ -151,7 +157,12 @@ class SupplierInquiryController extends Controller
 
     public function store(Request $request): JsonResponse
     {
-        $supplier = $this->resolveSupplier($request);
+        $user = $this->resolveUser($request);
+        
+        // Only suppliers can create inquiries
+        if (! $user instanceof Supplier) {
+            abort(403, 'Only suppliers can create inquiries.');
+        }
 
         $validated = $request->validate([
             'name' => 'required|string|max:255',
@@ -171,12 +182,42 @@ class SupplierInquiryController extends Controller
             'type' => 'inquiry',
             'is_read' => false,
             'from' => 'admin',
-            'supplier_id' => $supplier->id,
+            'supplier_id' => $user->id,
         ]);
 
         return response()->json([
             'message' => 'Inquiry created successfully.',
             'data' => $this->transformInquiry($inquiry),
         ], 201);
+    }
+
+    protected function transformInquiry(SupplierInquiry $inquiry): array
+    {
+        return [
+            'id' => $inquiry->id,
+            'full_name' => $inquiry->full_name,
+            'email_address' => $inquiry->email_address,
+            'phone_number' => $inquiry->phone_number,
+            'subject' => $inquiry->subject,
+            'message' => $inquiry->message,
+            'admin_response' => $inquiry->admin_response,
+            'admin_responded_at' => $inquiry->admin_responded_at?->format('Y-m-d H:i:s'),
+            'is_read' => $inquiry->is_read,
+            'from' => $inquiry->from,
+            'supplier_id' => $inquiry->supplier_id,
+            'admin_id' => $inquiry->admin_id,
+            'created_at' => $inquiry->created_at->format('Y-m-d H:i:s'),
+            'updated_at' => $inquiry->updated_at->format('Y-m-d H:i:s'),
+            'supplier' => $inquiry->supplier ? [
+                'id' => $inquiry->supplier->id,
+                'name' => $inquiry->supplier->name,
+                'email' => $inquiry->supplier->email,
+            ] : null,
+            'admin' => $inquiry->admin ? [
+                'id' => $inquiry->admin->id,
+                'name' => $inquiry->admin->name,
+                'email' => $inquiry->admin->email,
+            ] : null,
+        ];
     }
 }

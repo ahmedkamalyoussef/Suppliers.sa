@@ -62,8 +62,6 @@ class UpdateSupplierProfileRequest extends FormRequest
                 'sometimes',
                 'email',
                 'max:255',
-                Rule::unique('suppliers', 'email')->ignore(optional($this->user())->id),
-                Rule::unique('admins', 'email'),
             ],
             'contactPhone' => ['sometimes', 'string', 'max:20'],
             'mainPhone' => ['sometimes', 'nullable', 'string', 'max:20'],

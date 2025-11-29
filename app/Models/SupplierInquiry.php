@@ -16,6 +16,8 @@ class SupplierInquiry extends Model
         'phone_number',
         'subject',
         'message',
+        'admin_response',
+        'admin_responded_at',
         'is_read',
         'from',
         'admin_id',
@@ -24,6 +26,7 @@ class SupplierInquiry extends Model
 
     protected $casts = [
         'is_read' => 'boolean',
+        'admin_responded_at' => 'datetime',
     ];
 
     protected $attributes = [

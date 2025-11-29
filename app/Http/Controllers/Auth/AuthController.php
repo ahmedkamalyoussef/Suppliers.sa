@@ -23,7 +23,8 @@ class AuthController extends Controller
     {
         $user = Admin::where('email', $email)->first();
         if ($user) {
-            return ['user' => $user, 'type' => 'admin'];
+            $userType = $user->role === 'super_admin' ? 'super_admin' : 'admin';
+            return ['user' => $user, 'type' => $userType];
         }
 
         $user = Supplier::where('email', $email)->first();
@@ -67,16 +68,19 @@ class AuthController extends Controller
         $token = $user->createToken('auth_token')->plainTextToken;
 
         // Load relationships
-        if ($userInfo['type'] === 'admin') {
+        if (in_array($userInfo['type'], ['admin', 'super_admin'])) {
             $user->load('permissions');
         } elseif ($userInfo['type'] === 'supplier' && method_exists($user, 'profile')) {
             $user->load('profile', 'branches');
         }
 
-        $payloadKey = $userInfo['type'] === 'admin' ? 'admin' : 'supplier';
-        $payloadValue = $userInfo['type'] === 'admin'
-            ? $this->transformAdmin($user)
-            : (new SupplierResource($user))->toArray(request());
+        if (in_array($userInfo['type'], ['admin', 'super_admin'])) {
+            $payloadKey = $userInfo['type'];
+            $payloadValue = $this->transformAdmin($user);
+        } else {
+            $payloadKey = 'supplier';
+            $payloadValue = (new SupplierResource($user))->toArray(request());
+        }
 
         return response()->json([
             'message' => 'Login successful',
@@ -121,7 +125,7 @@ class AuthController extends Controller
         $user = $userInfo['user'];
 
         // Generate OTP based on user type
-        $otp = $userInfo['type'] === 'admin'
+        $otp = in_array($userInfo['type'], ['admin', 'super_admin'])
             ? Otp::generateForAdmin($user->id, $user->email)
             : Otp::generateForSupplier($user->id, $user->email);
 
@@ -151,7 +155,7 @@ class AuthController extends Controller
         $user = $userInfo['user'];
 
         // Find OTP based on user type
-        $otp = $userInfo['type'] === 'admin'
+        $otp = in_array($userInfo['type'], ['admin', 'super_admin'])
             ? Otp::where('admin_id', $user->id)
                 ->where('otp', $request->otp)
                 ->where('expires_at', '>', now())
@@ -172,16 +176,19 @@ class AuthController extends Controller
         $token = $user->createToken('auth_token')->plainTextToken;
 
         // Load relationships
-        if ($userInfo['type'] === 'admin') {
+        if (in_array($userInfo['type'], ['admin', 'super_admin'])) {
             $user->load('permissions');
         } elseif (method_exists($user, 'profile')) {
             $user->load('profile', 'branches');
         }
 
-        $payloadKey = $userInfo['type'] === 'admin' ? 'admin' : 'supplier';
-        $payloadValue = $userInfo['type'] === 'admin'
-            ? $this->transformAdmin($user)
-            : (new SupplierResource($user))->toArray(request());
+        if (in_array($userInfo['type'], ['admin', 'super_admin'])) {
+            $payloadKey = $userInfo['type'];
+            $payloadValue = $this->transformAdmin($user);
+        } else {
+            $payloadKey = 'supplier';
+            $payloadValue = (new SupplierResource($user))->toArray(request());
+        }
 
         return response()->json([
             'message' => 'Email verified successfully',
