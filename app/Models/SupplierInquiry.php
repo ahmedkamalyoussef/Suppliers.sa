@@ -10,6 +10,8 @@ class SupplierInquiry extends Model
     use HasFactory;
 
     protected $fillable = [
+        'sender_id',
+        'receiver_id',
         'supplier_id',
         'full_name',
         'email_address',
@@ -36,6 +38,16 @@ class SupplierInquiry extends Model
     public function supplier()
     {
         return $this->belongsTo(Supplier::class);
+    }
+
+    public function sender()
+    {
+        return $this->belongsTo(Supplier::class, 'sender_id');
+    }
+
+    public function receiver()
+    {
+        return $this->belongsTo(Supplier::class, 'receiver_id');
     }
 
     public function admin()

@@ -144,7 +144,7 @@ class InboxItemResource extends JsonResource
         
         switch ($this->resource_type) {
             case 'supplier_inquiry':
-                return $this->supplier_id == $supplierId ? 'sent' : 'received';
+                return $this->sender_id == $supplierId ? 'sent' : 'received';
             case 'supplier_to_supplier_inquiry':
                 return $this->sender_supplier_id == $supplierId ? 'sent' : 'received';
             case 'message':
@@ -162,9 +162,16 @@ class InboxItemResource extends JsonResource
     {
         switch ($this->resource_type) {
             case 'supplier_inquiry':
+                if ($this->sender) {
+                    return [
+                        'id' => $this->sender->id,
+                        'name' => $this->sender->name,
+                    ];
+                }
+                // If sender_id is null, it's from admin
                 return [
-                    'id' => $this->supplier->id ?? null,
-                    'name' => $this->full_name ?? 'Admin',
+                    'id' => null,
+                    'name' => 'Admin',
                 ];
             case 'supplier_to_supplier_inquiry':
                 return [
@@ -188,9 +195,16 @@ class InboxItemResource extends JsonResource
     {
         switch ($this->resource_type) {
             case 'supplier_inquiry':
+                if ($this->receiver) {
+                    return [
+                        'id' => $this->receiver->id,
+                        'name' => $this->receiver->name,
+                    ];
+                }
+                // If receiver_id is null, it's sent to admin
                 return [
-                    'id' => $this->supplier->id ?? null,
-                    'name' => $this->supplier->name ?? 'Admin',
+                    'id' => null,
+                    'name' => 'Admin',
                 ];
             case 'supplier_to_supplier_inquiry':
                 if (!$this->receiver) {

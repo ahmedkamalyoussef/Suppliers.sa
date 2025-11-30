@@ -16,10 +16,22 @@ class SupplierInquiryController extends Controller
         $user = $this->resolveUser($request);
 
         if ($user instanceof Supplier) {
-            $query = $user->inquiries()->latest();
+            // Show inbox (received) or sent based on query parameter
+            $box = $request->query('box', 'inbox');
+            
+            if ($box === 'sent') {
+                // Show messages sent by current supplier
+                $query = SupplierInquiry::where('sender_id', $user->id);
+            } else {
+                // Show messages received by current supplier (default)
+                $query = SupplierInquiry::where('receiver_id', $user->id);
+            }
         } else {
-            // Admin can see all inquiries
-            $query = SupplierInquiry::latest();
+            // Admin can see all inquiries, especially those with null receiver_id (general admin inquiries)
+            $query = SupplierInquiry::where(function($q) {
+                $q->whereNull('receiver_id')
+                  ->orWhereNotNull('receiver_id');
+            });
         }
 
         if ($status = $request->query('status')) {
@@ -43,7 +55,7 @@ class SupplierInquiryController extends Controller
         $perPage = (int) $request->query('perPage', 15);
         $perPage = $perPage > 0 ? min($perPage, 100) : 15;
 
-        $paginator = $query->paginate($perPage);
+        $paginator = $query->latest()->paginate($perPage);
 
         return response()->json([
             'data' => $paginator->getCollection()->map(
@@ -168,20 +180,23 @@ class SupplierInquiryController extends Controller
             'name' => 'required|string|max:255',
             'email' => 'nullable|email|max:255',
             'phone' => 'nullable|string|max:20',
-            'company' => 'nullable|string|max:255',
             'subject' => 'nullable|string|max:255',
             'message' => 'required|string',
+            'receiver_id' => 'nullable|exists:suppliers,id',
+            'type' => 'nullable|in:inquiry,reply',
         ]);
 
         $inquiry = SupplierInquiry::create([
+            'sender_id' => $user->id,
+            'receiver_id' => $validated['receiver_id'] ?? null,
             'full_name' => $validated['name'],
             'email_address' => $validated['email'],
             'phone_number' => $validated['phone'],
             'subject' => $validated['subject'],
             'message' => $validated['message'],
-            'type' => 'inquiry',
+            'type' => $validated['type'] ?? 'inquiry',
             'is_read' => false,
-            'from' => 'admin',
+            'from' => 'supplier',
             'supplier_id' => $user->id,
         ]);
 
@@ -195,6 +210,8 @@ class SupplierInquiryController extends Controller
     {
         return [
             'id' => $inquiry->id,
+            'sender_id' => $inquiry->sender_id,
+            'receiver_id' => $inquiry->receiver_id,
             'full_name' => $inquiry->full_name,
             'email_address' => $inquiry->email_address,
             'phone_number' => $inquiry->phone_number,
@@ -204,10 +221,21 @@ class SupplierInquiryController extends Controller
             'admin_responded_at' => $inquiry->admin_responded_at?->format('Y-m-d H:i:s'),
             'is_read' => $inquiry->is_read,
             'from' => $inquiry->from,
+            'type' => $inquiry->type,
             'supplier_id' => $inquiry->supplier_id,
             'admin_id' => $inquiry->admin_id,
             'created_at' => $inquiry->created_at->format('Y-m-d H:i:s'),
             'updated_at' => $inquiry->updated_at->format('Y-m-d H:i:s'),
+            'sender' => $inquiry->sender ? [
+                'id' => $inquiry->sender->id,
+                'name' => $inquiry->sender->name,
+                'email' => $inquiry->sender->email,
+            ] : null,
+            'receiver' => $inquiry->receiver ? [
+                'id' => $inquiry->receiver->id,
+                'name' => $inquiry->receiver->name,
+                'email' => $inquiry->receiver->email,
+            ] : null,
             'supplier' => $inquiry->supplier ? [
                 'id' => $inquiry->supplier->id,
                 'name' => $inquiry->supplier->name,

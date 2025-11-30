@@ -36,7 +36,7 @@ use App\Http\Controllers\Supplier\CertificationController;
 use App\Http\Controllers\Api\Supplier\BusinessRequestController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
-
+use App\Http\Controllers\Admin\AdminSupplierInquiryController;
 // Authenticated user info
 Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
     return $request->user();
@@ -113,6 +113,9 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/suppliers/export', [AdminSupplierController::class, 'export']);
         Route::get('/suppliers/{supplier}', [AdminSupplierController::class, 'show']);
         Route::put('/suppliers/{supplier}', [AdminSupplierController::class, 'update']);
+        
+        // Admin Supplier Inquiries
+        Route::post('/inquiries/reply', [AdminSupplierInquiryController::class, 'reply']);
         
         // Admin Supplier Product Images
         Route::get('/suppliers/{supplier}/product-images', [AdminProductImageController::class, 'index']);

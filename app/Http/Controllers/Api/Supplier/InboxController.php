@@ -40,9 +40,12 @@ class InboxController extends Controller
         // Collect all communications
         $allItems = new Collection();
 
-        // 1. Supplier Inquiries (from admin)
-        $supplierInquiries = SupplierInquiry::with(['supplier'])
-            ->where('supplier_id', $supplier->id)
+        // 1. Supplier Inquiries
+        $supplierInquiries = SupplierInquiry::with(['supplier', 'sender', 'receiver'])
+            ->where(function($query) use ($supplier) {
+                $query->where('sender_id', $supplier->id)      // Sent by this supplier
+                      ->orWhere('receiver_id', $supplier->id);    // Received by this supplier
+            })
             ->get()
             ->map(function ($item) {
                 $item->resource_type = 'supplier_inquiry';
@@ -140,7 +143,9 @@ class InboxController extends Controller
         $count = 0;
 
         // Supplier inquiries
-        $count += SupplierInquiry::where('supplier_id', $supplierId)
+        $count += SupplierInquiry::where(function($query) use ($supplierId) {
+                $query->where('receiver_id', $supplierId);
+            })
             ->where('is_read', false)
             ->count();
 
@@ -169,7 +174,7 @@ class InboxController extends Controller
     {
         switch ($item->resource_type) {
             case 'supplier_inquiry':
-                return $item->supplier_id == $supplierId ? 'sent' : 'received';
+                return $item->sender_id == $supplierId ? 'sent' : 'received';
             case 'supplier_to_supplier_inquiry':
                 return $item->sender_supplier_id == $supplierId ? 'sent' : 'received';
             case 'message':
@@ -260,18 +265,32 @@ class InboxController extends Controller
             case 'supplier_inquiry':
                 // Reply to admin inquiry (create a new inquiry as reply)
                 $originalInquiry = SupplierInquiry::where('id', $id)
-                    ->where('supplier_id', $supplier->id)
+                    ->where(function($query) use ($supplier) {
+                        $query->where('sender_id', $supplier->id)
+                              ->orWhere('receiver_id', $supplier->id)
+                              ->orWhereNull('receiver_id'); // General admin inquiries
+                    })
                     ->firstOrFail();
 
+                // Determine receiver: if original was from admin to supplier, reply to admin
+                // If original was from supplier to admin, reply to the original sender
+                $receiverId = null; // Default to admin pool
+                if ($originalInquiry->sender_id && $originalInquiry->sender_id !== $supplier->id) {
+                    // Original was from another supplier, reply to them
+                    $receiverId = $originalInquiry->sender_id;
+                }
+
                 $reply = SupplierInquiry::create([
+                    'sender_id' => $supplier->id,
+                    'receiver_id' => $receiverId,
                     'supplier_id' => $supplier->id,
                     'full_name' => $supplier->name,
                     'email_address' => $supplier->email,
                     'phone_number' => $supplier->phone,
-                    'subject' => 'Re: ' . $originalInquiry->subject,
+                    'subject' => $originalInquiry->subject,
                     'message' => $replyText,
                     'is_read' => false,
-                    'type' => 'inquiry',
+                    'type' => 'reply',
                     'from' => 'supplier',
                 ]);
 
