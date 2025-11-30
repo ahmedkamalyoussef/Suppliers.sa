@@ -14,6 +14,7 @@ return new class extends Migration
         Schema::table('supplier_inquiries', function (Blueprint $table) {
             $table->unsignedBigInteger('sender_id')->nullable()->after('id');
             $table->unsignedBigInteger('receiver_id')->nullable()->after('sender_id');
+            $table->boolean('is_guest')->default(false)->after('sender_id');
             
             // Add foreign keys
             $table->foreign('sender_id')->references('id')->on('suppliers')->onDelete('cascade');
@@ -33,7 +34,7 @@ return new class extends Migration
         Schema::table('supplier_inquiries', function (Blueprint $table) {
             $table->dropForeign(['sender_id']);
             $table->dropForeign(['receiver_id']);
-            $table->dropColumn(['sender_id', 'receiver_id']);
+            $table->dropColumn(['sender_id', 'receiver_id', 'is_guest']);
         });
     }
 };

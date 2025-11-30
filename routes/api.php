@@ -37,6 +37,8 @@ use App\Http\Controllers\Api\Supplier\BusinessRequestController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Admin\AdminSupplierInquiryController;
+use App\Http\Controllers\Public\TopSuppliersController;
+
 // Authenticated user info
 Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
     return $request->user();
@@ -92,6 +94,11 @@ Route::post('/admins/register-super', [AdminController::class, 'registerSuper'])
 
 // Public business endpoint
 Route::get('/suppliers/{id}/business', 'App\\Http\\Controllers\\SupplierController@getSupplierBusiness');
+
+// Public top suppliers endpoints (no authentication required)
+Route::get('/suppliers/top-rated', [TopSuppliersController::class, 'topRated']);
+Route::get('/suppliers/most-active', [TopSuppliersController::class, 'mostActive']);
+Route::get('/suppliers/most-viewed', [TopSuppliersController::class, 'mostViewed']);
 
 Route::middleware('auth:sanctum')->group(function () {
     // Protected supplier profile endpoint (only owner can view)

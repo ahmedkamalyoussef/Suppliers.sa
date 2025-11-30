@@ -130,6 +130,7 @@ class AnalyticsController extends Controller
                 ')
                 ->where('supplier_id', $supplier->id)
                 ->whereNotNull('customer_type')
+                ->where('customer_type', '!=', '')
                 ->where('last_visit', '>=', now()->subDays($range))
                 ->groupBy('customer_type')
                 ->orderBy('sessions', 'desc')
@@ -156,6 +157,8 @@ class AnalyticsController extends Controller
                 ')
                 ->where('supplier_id', $supplier->id)
                 ->whereNotNull('location')
+                ->where('location', '!=', '')
+                ->where('location', '!=', 'Unknown')
                 ->where('last_visit', '>=', now()->subDays($range))
                 ->groupBy('location')
                 ->orderBy('sessions', 'desc')
@@ -184,9 +187,21 @@ class AnalyticsController extends Controller
             $totalCustomers = \DB::table('analytics_visitor_logs')
                 ->where('supplier_id', $supplier->id)
                 ->whereNotNull('customer_type')
+                ->where('customer_type', '!=', '')
                 ->where('last_visit', '>=', now()->subDays($range))
                 ->distinct('ip_address')
                 ->count('ip_address');
+            
+            // If no data, return empty arrays to avoid showing incorrect data
+            if ($totalVisitors === 0) {
+                return response()->json([
+                    'demographics' => [],
+                    'topLocations' => [],
+                    'totalVisitors' => 0,
+                    'totalCustomers' => 0,
+                    'period' => "Last {$range} days"
+                ]);
+            }
             
             return response()->json([
                 'demographics' => $demographics,
@@ -823,18 +838,19 @@ class AnalyticsController extends Controller
             $respondedCount += $respondedMessages;
         }
         
-        // 3. Admin Inquiries
+        // 3. Admin Inquiries (from admin to supplier)
         $totalAdminInquiries = \DB::table('supplier_inquiries')
-            ->where('supplier_id', $supplierId)
+            ->where('receiver_id', $supplierId)
+            ->where('from', 'admin')
             ->count();
 
         if ($totalAdminInquiries > 0) {
             $totalReceived += $totalAdminInquiries;
+            // Count replies from supplier to admin inquiries
             $respondedAdminInquiries = \DB::table('supplier_inquiries')
-                ->where('supplier_id', $supplierId)
-                ->where('from', 'admin')
-                ->whereNotNull('admin_response')
-                ->whereNotNull('admin_responded_at')
+                ->where('sender_id', $supplierId)
+                ->where('from', 'supplier')
+                ->where('type', 'reply')
                 ->count();
             $respondedCount += $respondedAdminInquiries;
         }

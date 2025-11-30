@@ -204,6 +204,10 @@ class AdminSupplierController extends Controller
             'email_verified_at' => now(),
         ]);
 
+        // Force update email_verified_at just in case
+        $supplier->email_verified_at = now();
+        $supplier->save();
+
         // Create profile with business name
         $supplier->profile()->create([
             'business_name' => $validated['businessName'],

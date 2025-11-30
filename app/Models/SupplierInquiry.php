@@ -24,11 +24,13 @@ class SupplierInquiry extends Model
         'from',
         'admin_id',
         'type',
+        'is_guest',
     ];
 
     protected $casts = [
         'is_read' => 'boolean',
         'admin_responded_at' => 'datetime',
+        'is_guest' => 'boolean',
     ];
 
     protected $attributes = [

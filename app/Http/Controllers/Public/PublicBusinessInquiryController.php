@@ -23,15 +23,25 @@ class PublicBusinessInquiryController extends Controller
             'message' => 'required|string',
         ]);
 
+        // Check if user is logged in (has auth token)
+        $isGuest = !auth()->check();
+        $senderId = $isGuest ? null : auth()->id();
+
         $inquiry = SupplierInquiry::create(array_merge($validated, [
             'supplier_id' => $supplier->id,
-            'status' => 'pending',
-            'is_unread' => true,
+            'receiver_id' => $supplier->id,
+            'sender_id' => $senderId,
+            'is_guest' => $isGuest,
+            'from' => 'public',
+            'full_name' => $validated['name'],
+            'email_address' => $validated['email'],
+            'phone_number' => $validated['phone'],
         ]));
 
         return response()->json([
             'message' => 'Your inquiry has been sent successfully.',
             'inquiryId' => $inquiry->id,
+            'isGuest' => $isGuest,
         ], 201);
     }
 }
