@@ -168,7 +168,6 @@ class AdminSupplierController extends Controller
 
         return response()->json([
             'message' => 'Supplier updated successfully.',
-            'user' => $this->formatSupplier($supplier, true),
         ]);
     }
 
@@ -185,8 +184,101 @@ class AdminSupplierController extends Controller
         ]);
     }
 
-    public function destroy(Supplier $supplier): JsonResponse
+    public function addSupplier(Request $request): JsonResponse
     {
+        $validated = $request->validate([
+            'name' => 'required|string|max:255',
+            'email' => 'required|email|max:255|unique:suppliers,email',
+            'businessName' => 'required|string|max:255',
+            'plan' => 'required|in:Basic,Premium,Enterprise',
+            'status' => 'required|in:active,pending,suspended,inactive',
+            'password' => 'required|string|min:6',
+        ]);
+
+        $supplier = Supplier::create([
+            'name' => $validated['name'],
+            'email' => $validated['email'],
+            'plan' => $validated['plan'],
+            'status' => $validated['status'],
+            'password' => bcrypt($validated['password']),
+            'email_verified_at' => now(),
+        ]);
+
+        // Create profile with business name
+        $supplier->profile()->create([
+            'business_name' => $validated['businessName'],
+        ]);
+
+        return response()->json([
+            'message' => 'Supplier created successfully.',
+            
+        ], 201);
+    }
+
+    public function export(): \Illuminate\Http\Response
+    {
+        $suppliers = Supplier::with(['profile', 'branches', 'approvedRatings'])
+            ->get()
+            ->map(function (Supplier $supplier) {
+                $profile = $supplier->profile;
+                return [
+                    'ID' => $supplier->id,
+                    'Name' => $supplier->name,
+                    'Email' => $supplier->email,
+                    'Phone' => $supplier->phone,
+                    'Business Name' => $profile?->business_name ?? $supplier->name,
+                    'Business Type' => $profile?->business_type ?? '',
+                    'Plan' => ucfirst($supplier->plan ?? 'Basic'),
+                    'Status' => $supplier->status ?? 'pending',
+                    'Join Date' => optional($supplier->created_at)->format('Y-m-d'),
+                    'Last Active' => optional($supplier->last_seen_at ?? $supplier->updated_at)->format('Y-m-d'),
+                    'Rating' => $supplier->approvedRatings()->avg('score') ? round($supplier->approvedRatings()->avg('score'), 1) : 'N/A',
+                    'Reviews Count' => $supplier->approvedRatings()->count(),
+                    'Branches Count' => $supplier->branches()->count(),
+                    'Profile Completion' => $this->calculateProfileCompletion($supplier) . '%',
+                ];
+            });
+
+        $csv = $this->arrayToCsv($suppliers->toArray());
+
+        return response($csv)
+            ->header('Content-Type', 'text/csv')
+            ->header('Content-Disposition', 'attachment; filename="suppliers-' . date('Y-m-d') . '.csv"');
+    }
+
+    private function arrayToCsv(array $data): string
+    {
+        if (empty($data)) {
+            return '';
+        }
+
+        $output = fopen('php://temp', 'r+');
+        
+        // Add header row
+        fputcsv($output, array_keys($data[0]));
+        
+        // Add data rows
+        foreach ($data as $row) {
+            fputcsv($output, $row);
+        }
+        
+        rewind($output);
+        $csv = stream_get_contents($output);
+        fclose($output);
+        
+        return $csv;
+    }
+
+    public function destroy($id): JsonResponse
+    {
+        $supplier = Supplier::find($id);
+        
+        if (! $supplier) {
+            return response()->json([
+                'message' => 'Supplier not found.',
+            ], 404);
+        }
+        
         $supplier->delete();
 
         return response()->json([
@@ -217,7 +309,7 @@ class AdminSupplierController extends Controller
             'lastActive' => optional($lastActive)->toIso8601String(),
             'revenue' => '$'.number_format($revenueEstimate),
             'profileCompletion' => $this->calculateProfileCompletion($supplier),
-            'avatar' => \App\Support\Media::mediaUrl($supplier->profile_image) ?? 'https://readdy.ai/api/search-image?query=Professional%20business%20avatar&width=120&height=120',
+            'avatar' => \App\Support\Media::url($supplier->profile_image) ?? 'https://readdy.ai/api/search-image?query=Professional%20business%20avatar&width=120&height=120',
             'rating' => $ratingAvg ? round((float) $ratingAvg, 1) : null,
             'reviewsCount' => $ratingCount,
         ];

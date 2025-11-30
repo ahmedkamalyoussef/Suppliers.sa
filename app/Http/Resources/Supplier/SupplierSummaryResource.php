@@ -27,7 +27,7 @@ class SupplierSummaryResource extends JsonResource
         return array_filter([
             'id' => $supplier->id,
             'name' => $supplier->name,
-            'businessImage' => $profile?->business_image ? asset($profile->business_image) : null,
+            'businessImage' => $profile?->business_image ? asset($profile->business_image) : ($supplier->profile_image ? \App\Support\Media::url($supplier->profile_image) : null),
             'slug' => $profile?->slug,
             'category' => $profile?->business_categories[0] ?? null,
             'categories' => $profile?->business_categories ? array_slice($profile->business_categories, 0, 2) : [],

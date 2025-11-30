@@ -109,6 +109,8 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/profile/image', [AdminController::class, 'updateProfileImage']);
         Route::post('/register-super', [AdminController::class, 'registerSuper']);
         Route::get('/suppliers', [AdminSupplierController::class, 'index']);
+        Route::post('/suppliers', [AdminSupplierController::class, 'addSupplier']);
+        Route::get('/suppliers/export', [AdminSupplierController::class, 'export']);
         Route::get('/suppliers/{supplier}', [AdminSupplierController::class, 'show']);
         Route::put('/suppliers/{supplier}', [AdminSupplierController::class, 'update']);
         
