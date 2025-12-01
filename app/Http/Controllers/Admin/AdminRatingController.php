@@ -27,8 +27,9 @@ class AdminRatingController extends Controller
             }
 
             $user->loadMissing('permissions');
-            if (! $user->permissions || ! $user->hasPermission('content_management_supervise')) {
-                return response()->json(['message' => 'Unauthorized. Content supervision permission required.'], 403);
+            if (! $user->permissions || 
+                (! $user->hasPermission('content_management_view') && ! $user->hasPermission('content_management_supervise'))) {
+                return response()->json(['message' => 'Unauthorized. Content management permission required.'], 403);
             }
 
             return $next($request);
@@ -40,7 +41,11 @@ class AdminRatingController extends Controller
         $query = SupplierRating::query()->with(['rater.profile', 'rated.profile', 'moderatedBy']);
 
         if ($status = $request->query('status')) {
-            $query->where('status', $status);
+            if ($status === 'all') {
+                $query->whereIn('status', ['rejected', 'flagged', 'pending_review']);
+            } else {
+                $query->where('status', $status);
+            }
         }
 
         if ($request->boolean('flagged')) {

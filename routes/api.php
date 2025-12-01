@@ -159,6 +159,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/ratings/{rating}/flag', [AdminRatingController::class, 'flag']);
         Route::post('/ratings/{rating}/restore', [AdminRatingController::class, 'restore']);
         Route::get('/documents', [AdminDocumentController::class, 'index']);
+        Route::get('/content/approved-today', [AdminDocumentController::class, 'approvedToday']);
         Route::get('/documents/{document}', [AdminDocumentController::class, 'show']);
         Route::post('/documents/{document}/approve', [AdminDocumentController::class, 'approve']);
         Route::post('/documents/{document}/reject', [AdminDocumentController::class, 'reject']);

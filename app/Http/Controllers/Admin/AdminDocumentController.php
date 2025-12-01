@@ -26,8 +26,9 @@ class AdminDocumentController extends Controller
             }
 
             $user->loadMissing('permissions');
-            if (! $user->permissions || ! $user->hasPermission('content_management_supervise')) {
-                return response()->json(['message' => 'Unauthorized. Content supervision permission required.'], 403);
+            if (! $user->permissions || 
+                (! $user->hasPermission('content_management_view') && ! $user->hasPermission('content_management_supervise'))) {
+                return response()->json(['message' => 'Unauthorized. Content management permission required.'], 403);
             }
 
             return $next($request);
@@ -39,7 +40,11 @@ class AdminDocumentController extends Controller
         $query = SupplierDocument::query()->with(['supplier.profile', 'reviewer']);
 
         if ($status = $request->query('status')) {
-            $query->where('status', $status);
+            if ($status === 'all') {
+                $query->whereIn('status', ['rejected', 'pending']);
+            } else {
+                $query->where('status', $status);
+            }
         }
 
         if ($type = $request->query('documentType')) {
@@ -60,13 +65,62 @@ class AdminDocumentController extends Controller
             });
         }
 
-        $perPage = (int) $request->query('perPage', 25);
+        $perPage = (int) $request->query('per_page', 25);
         $perPage = $perPage > 0 ? min($perPage, 100) : 25;
+
+        // Debug: Get all documents first to see what's there
+        $allDocuments = SupplierDocument::with('supplier.profile')->get();
+        \Log::info('All documents count: ' . $allDocuments->count());
+        \Log::info('Requested status: ' . $request->query('status'));
+        \Log::info('Documents with their statuses:');
+        foreach ($allDocuments as $doc) {
+            \Log::info('Doc ID: ' . $doc->id . ', Status: ' . $doc->status . ', Supplier: ' . ($doc->supplier ? $doc->supplier->name : 'No supplier'));
+        }
 
         $documents = $query->latest()->paginate($perPage);
 
         return response()->json([
-            'data' => $documents->getCollection()->map(fn (SupplierDocument $document) => (new \App\Http\Resources\DocumentResource($document))->toArray($request))->values(),
+            'data' => $documents->getCollection()->map(function (SupplierDocument $document) use ($request) {
+                $supplier = $document->supplier;
+                $profile = $supplier->profile;
+                
+                $data = [
+                    'id' => $document->id,
+                    'status' => $document->status,
+                    'notes' => $document->notes,
+                    'reviewed_at' => $document->reviewed_at,
+                    'created_at' => $document->created_at,
+                    'document_link' => $document->file_path ? url($document->file_path) : null,
+                    
+                    // Supplier information
+                    'supplier' => [
+                        'id' => $supplier->id,
+                        'name' => $supplier->name,
+                        'email' => $supplier->email,
+                        'phone' => $supplier->phone,
+                        'status' => $supplier->status,
+                        'profile_image' => $supplier->profile_image ? url($supplier->profile_image) : null,
+                        'business_name' => $profile?->business_name,
+                        'created_at' => $supplier->created_at,
+                    ]
+                ];
+                
+                // Add non-null document fields
+                if ($document->document_type) {
+                    $data['document_type'] = $document->document_type;
+                }
+                if ($document->reference_number) {
+                    $data['reference_number'] = $document->reference_number;
+                }
+                if ($document->issue_date) {
+                    $data['issue_date'] = $document->issue_date;
+                }
+                if ($document->expiry_date) {
+                    $data['expiry_date'] = $document->expiry_date;
+                }
+                
+                return $data;
+            })->values(),
             'pagination' => [
                 'currentPage' => $documents->currentPage(),
                 'perPage' => $documents->perPage(),
@@ -101,9 +155,14 @@ class AdminDocumentController extends Controller
             'reviewed_at' => now(),
         ])->save();
 
+        // Update supplier status to active when document is approved
+        $supplier = $document->supplier;
+        if ($supplier->status !== 'active') {
+            $supplier->forceFill(['status' => 'active'])->save();
+        }
+
         return response()->json([
-            'message' => 'Document approved.',
-            'data' => (new \App\Http\Resources\DocumentResource($document->fresh()))->toArray($request),
+            'message' => 'Document approved and supplier status updated to active.',
         ]);
     }
 
@@ -122,9 +181,34 @@ class AdminDocumentController extends Controller
             'reviewed_at' => now(),
         ])->save();
 
+        $supplier = $document->supplier;
+
         return response()->json([
             'message' => 'Document rejected.',
-            'data' => (new DocumentResource($document->fresh()))->toArray(request()),
+            'data' => [
+                'id' => $document->id,
+                'document_type' => $document->document_type,
+                'reference_number' => $document->reference_number,
+                'issue_date' => $document->issue_date,
+                'expiry_date' => $document->expiry_date,
+                'status' => $document->status,
+                'notes' => $document->notes,
+                'reviewed_at' => $document->reviewed_at,
+                'created_at' => $document->created_at,
+                'document_link' => $document->file_path ? url($document->file_path) : null,
+                
+                // Supplier information
+                'supplier' => [
+                    'id' => $supplier->id,
+                    'name' => $supplier->name,
+                    'email' => $supplier->email,
+                    'phone' => $supplier->phone,
+                    'status' => $supplier->status,
+                    'profile_image' => $supplier->profile_image ? url($supplier->profile_image) : null,
+                    'business_name' => $supplier->profile?->business_name,
+                    'created_at' => $supplier->created_at,
+                ]
+            ]
         ]);
     }
 
@@ -137,7 +221,7 @@ class AdminDocumentController extends Controller
         ]);
 
         $document->forceFill([
-            'status' => 'pending_verification',
+            'status' => 'pending',
             'notes' => $validated['notes'] ?? $document->notes,
             'reviewed_by_admin_id' => $admin->id,
             'reviewed_at' => now(),
@@ -146,6 +230,23 @@ class AdminDocumentController extends Controller
         return response()->json([
             'message' => 'Resubmission requested.',
             'data' => (new DocumentResource($document->fresh()))->toArray(request()),
+        ]);
+    }
+
+    public function approvedToday(): JsonResponse
+    {
+        $today = now()->startOfDay();
+        
+        $approvedDocuments = SupplierDocument::where('status', 'verified')
+            ->whereDate('reviewed_at', $today)
+            ->count();
+            
+        $approvedReviews = \App\Models\SupplierRating::where('status', 'approved')
+            ->whereDate('moderated_at', $today)
+            ->count();
+
+        return response()->json([
+            'approvedToday' => $approvedDocuments + $approvedReviews
         ]);
     }
 }
