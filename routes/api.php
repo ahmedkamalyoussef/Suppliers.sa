@@ -112,6 +112,10 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/dashboard/analytics', [AdminDashboardController::class, 'analytics']);
         Route::get('/dashboard/analytics/v2', [AdminDashboardController::class, 'dashboardAnalytics']);
         Route::get('/dashboard/analytics/export', [AdminDashboardController::class, 'exportAnalytics']);
+        Route::get('/system/settings', [AdminDashboardController::class, 'getSystemSettings']);
+        Route::put('/system/settings', [AdminDashboardController::class, 'updateSystemSettings']);
+        Route::post('/system/settings/restore', [AdminDashboardController::class, 'restoreSystemDefaults']);
+        Route::post('/system/backup', [AdminDashboardController::class, 'createSystemBackup']);
         Route::get('/profile', [AdminController::class, 'getProfile']);
         Route::get('/permissions', [AdminController::class, 'getPermissions']);
         Route::put('/profile', [AdminController::class, 'updateProfile']);

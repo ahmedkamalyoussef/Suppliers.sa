@@ -12,6 +12,7 @@ use App\Models\SupplierService;
 use App\Models\SupplierProduct;
 use App\Models\SupplierCertification;
 use App\Models\SupplierDocument;
+use App\Models\SystemSettings;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -1008,5 +1009,355 @@ class AdminDashboardController extends Controller
         } catch (\Exception $e) {
             return ['status' => 'warning', 'message' => 'Could not check queue status'];
         }
+    }
+
+    public function getSystemSettings(Request $request): JsonResponse
+    {
+        $admin = $request->user();
+
+        if (! $admin instanceof Admin) {
+            return response()->json(['message' => 'Unauthorized. Admin access required.'], 403);
+        }
+
+        if (! $admin->isSuperAdmin()) {
+            $admin->loadMissing('permissions');
+            $permissions = $admin->permissions;
+
+            if (! $permissions || (! $permissions->system_manage && ! $permissions->system_settings)) {
+                return response()->json(['message' => 'Unauthorized. System settings permission required.'], 403);
+            }
+        }
+
+        $settings = SystemSettings::first();
+
+        if (! $settings) {
+            // Create default settings if none exist
+            $settings = SystemSettings::create([
+                'site_name' => 'Suppliers.sa',
+                'contact_email' => 'contact@suppliers.sa',
+                'support_email' => 'support@suppliers.sa',
+                'maintenance_mode' => false,
+                'maximum_photos_per_business' => 10,
+                'maximum_description_characters' => 1000,
+                'auto_approve_businesses' => false,
+                'business_verification_required' => true,
+                'premium_features_enabled' => true,
+                'maximum_login_attempts' => 5,
+                'session_timeout_minutes' => 120,
+                'require_two_factor_authentication' => false,
+                'strong_password_required' => true,
+                'data_encryption_enabled' => true,
+                'email_notifications' => true,
+                'sms_notifications' => false,
+                'push_notifications' => true,
+                'system_alerts' => true,
+                'maintenance_notifications' => true,
+                'backup_retention_days' => 30,
+            ]);
+        }
+
+        return response()->json([
+            'success' => true,
+            'settings' => $settings
+        ]);
+    }
+
+    public function updateSystemSettings(Request $request): JsonResponse
+    {
+        $admin = $request->user();
+
+        if (! $admin instanceof Admin) {
+            return response()->json(['message' => 'Unauthorized. Admin access required.'], 403);
+        }
+
+        if (! $admin->isSuperAdmin()) {
+            $admin->loadMissing('permissions');
+            $permissions = $admin->permissions;
+
+            if (! $permissions || (! $permissions->system_manage && ! $permissions->system_settings)) {
+                return response()->json(['message' => 'Unauthorized. System settings permission required.'], 403);
+            }
+        }
+
+        $validator = \Validator::make($request->all(), [
+            // Basic Site Settings
+            'site_name' => 'required|string|max:255',
+            'contact_email' => 'required|email|max:255',
+            'support_email' => 'required|email|max:255',
+            'site_description' => 'nullable|string|max:1000',
+            'maintenance_mode' => 'boolean',
+            
+            // Business Settings
+            'maximum_photos_per_business' => 'required|integer|min:1|max:50',
+            'maximum_description_characters' => 'required|integer|min:100|max:5000',
+            'auto_approve_businesses' => 'boolean',
+            'business_verification_required' => 'boolean',
+            'premium_features_enabled' => 'boolean',
+            
+            // Security Settings
+            'maximum_login_attempts' => 'required|integer|min:3|max:10',
+            'session_timeout_minutes' => 'required|integer|min:15|max:480',
+            'require_two_factor_authentication' => 'boolean',
+            'strong_password_required' => 'boolean',
+            'data_encryption_enabled' => 'boolean',
+            
+            // Notification Settings
+            'email_notifications' => 'boolean',
+            'sms_notifications' => 'boolean',
+            'push_notifications' => 'boolean',
+            'system_alerts' => 'boolean',
+            'maintenance_notifications' => 'boolean',
+            
+            // System Settings
+            'backup_retention_days' => 'required|integer|min:7|max:365',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed',
+                'errors' => $validator->errors()
+            ], 422);
+        }
+
+        try {
+            $settings = SystemSettings::first();
+            
+            if (! $settings) {
+                $settings = new SystemSettings();
+            }
+
+            $settings->fill($request->all());
+            $settings->save();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'System settings updated successfully',
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to update system settings',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    public function restoreSystemDefaults(Request $request): JsonResponse
+    {
+        $admin = $request->user();
+
+        if (! $admin instanceof Admin) {
+            return response()->json(['message' => 'Unauthorized. Admin access required.'], 403);
+        }
+
+        if (! $admin->isSuperAdmin()) {
+            $admin->loadMissing('permissions');
+            $permissions = $admin->permissions;
+
+            if (! $permissions || (! $permissions->system_manage && ! $permissions->system_settings)) {
+                return response()->json(['message' => 'Unauthorized. System settings permission required.'], 403);
+            }
+        }
+
+        try {
+            $settings = SystemSettings::first();
+            
+            if (! $settings) {
+                $settings = new SystemSettings();
+            }
+
+            // Restore to default values
+            $settings->update([
+                'site_name' => 'Suppliers.sa',
+                'contact_email' => 'contact@suppliers.sa',
+                'support_email' => 'support@suppliers.sa',
+                'site_description' => 'Professional suppliers directory platform connecting businesses with trusted suppliers across Saudi Arabia.',
+                'maintenance_mode' => false,
+                
+                'maximum_photos_per_business' => 10,
+                'maximum_description_characters' => 1000,
+                'auto_approve_businesses' => false,
+                'business_verification_required' => true,
+                'premium_features_enabled' => true,
+                
+                'maximum_login_attempts' => 5,
+                'session_timeout_minutes' => 120,
+                'require_two_factor_authentication' => false,
+                'strong_password_required' => true,
+                'data_encryption_enabled' => true,
+                
+                'email_notifications' => true,
+                'sms_notifications' => false,
+                'push_notifications' => true,
+                'system_alerts' => true,
+                'maintenance_notifications' => true,
+                
+                'backup_retention_days' => 30,
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'System settings restored to defaults successfully',
+                'settings' => $settings->fresh()
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to restore system defaults',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    public function createSystemBackup(Request $request): JsonResponse
+    {
+        $admin = $request->user();
+
+        if (! $admin instanceof Admin) {
+            return response()->json(['message' => 'Unauthorized. Admin access required.'], 403);
+        }
+
+        if (! $admin->isSuperAdmin()) {
+            $admin->loadMissing('permissions');
+            $permissions = $admin->permissions;
+
+            if (! $permissions || (! $permissions->system_backups && ! $permissions->system_manage)) {
+                return response()->json(['message' => 'Unauthorized. System backups or system manage permission required.'], 403);
+            }
+        }
+
+        try {
+            // Create backup directory if it doesn't exist
+            $backupDir = storage_path('app/backups');
+            if (! is_dir($backupDir)) {
+                mkdir($backupDir, 0755, true);
+            }
+
+            // Create backup filename with timestamp
+            $backupFilename = 'Suppliers.sa-backup-' . date('Y-m-d-H-i-s') . '.zip';
+            $backupPath = $backupDir . '/' . $backupFilename;
+
+            // Create ZIP archive
+            $zip = new \ZipArchive();
+            if ($zip->open($backupPath, \ZipArchive::CREATE | \ZipArchive::OVERWRITE) !== TRUE) {
+                throw new \Exception('Cannot create backup file');
+            }
+
+            // Add database dump
+            $dbDumpFile = storage_path('app/temp_db_dump.sql');
+            $this->createDatabaseDump($dbDumpFile);
+            $zip->addFile($dbDumpFile, 'database.sql');
+            
+            // Add application files (excluding vendor and node_modules)
+            $this->addDirectoryToZip($zip, base_path('app'), 'app');
+            $this->addDirectoryToZip($zip, base_path('config'), 'config');
+            $this->addDirectoryToZip($zip, base_path('database'), 'database');
+            $this->addDirectoryToZip($zip, base_path('resources'), 'resources');
+            $this->addDirectoryToZip($zip, base_path('routes'), 'routes');
+            $this->addDirectoryToZip($zip, base_path('storage/app'), 'storage/app');
+            $this->addDirectoryToZip($zip, base_path('storage/framework'), 'storage/framework');
+            $this->addDirectoryToZip($zip, base_path('storage/logs'), 'storage/logs');
+            $this->addDirectoryToZip($zip, base_path('public'), 'public');
+            $zip->addFile(base_path('.env'), '.env');
+
+            $zip->close();
+
+            // Clean up temporary database dump
+            if (file_exists($dbDumpFile)) {
+                unlink($dbDumpFile);
+            }
+
+            // Get backup file info
+            $backupInfo = [
+                'filename' => $backupFilename,
+                'path' => $backupPath,
+                'size' => filesize($backupPath),
+                'created_at' => date('Y-m-d H:i:s'),
+                'size_formatted' => $this->formatBytes(filesize($backupPath))
+            ];
+
+            return response()->json([
+                'success' => true,
+                'message' => 'System backup created successfully',
+                'backup' => $backupInfo
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to create system backup',
+                'error' => $e->getMessage(),
+                'trace' => config('app.debug') ? $e->getTraceAsString() : null
+            ], 500);
+        }
+    }
+
+    private function createDatabaseDump($outputFile)
+    {
+        $dbHost = env('DB_HOST', '127.0.0.1');
+        $dbPort = env('DB_PORT', '3306');
+        $dbDatabase = env('DB_DATABASE');
+        $dbUsername = env('DB_USERNAME');
+        $dbPassword = env('DB_PASSWORD');
+
+        $command = sprintf(
+            'mysqldump --user=%s --password=%s --host=%s --port=%s --single-transaction --quick --lock-tables=false %s > %s',
+            escapeshellarg($dbUsername),
+            escapeshellarg($dbPassword),
+            escapeshellarg($dbHost),
+            escapeshellarg($dbPort),
+            escapeshellarg($dbDatabase),
+            escapeshellarg($outputFile)
+        );
+
+        exec($command, $output, $returnCode);
+
+        if ($returnCode !== 0) {
+            throw new \Exception('Database dump failed: ' . implode("\n", $output));
+        }
+    }
+
+    private function addDirectoryToZip($zip, $sourcePath, $zipPath)
+    {
+        if (! is_dir($sourcePath)) {
+            return;
+        }
+
+        $files = new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator($sourcePath, \RecursiveDirectoryIterator::SKIP_DOTS),
+            \RecursiveIteratorIterator::SELF_FIRST
+        );
+
+        foreach ($files as $file) {
+            $filePath = $file->getPathname();
+            $relativePath = $zipPath . '/' . str_replace($sourcePath, '', $filePath);
+
+            if ($file->isDir()) {
+                $zip->addEmptyDir($relativePath);
+            } elseif ($file->isFile()) {
+                // Skip large files and unnecessary files
+                if ($file->getSize() > 50 * 1024 * 1024) { // Skip files larger than 50MB
+                    continue;
+                }
+                if (preg_match('/\.(log|cache|tmp)$/', $filePath)) {
+                    continue;
+                }
+                $zip->addFile($filePath, $relativePath);
+            }
+        }
+    }
+
+    private function formatBytes($bytes, $precision = 2)
+    {
+        $units = array('B', 'KB', 'MB', 'GB', 'TB');
+
+        for ($i = 0; $bytes > 1024 && $i < count($units) - 1; $i++) {
+            $bytes /= 1024;
+        }
+
+        return round($bytes, $precision) . ' ' . $units[$i];
     }
 }
