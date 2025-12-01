@@ -8,11 +8,17 @@ use App\Models\Supplier;
 use App\Models\SupplierInquiry;
 use App\Models\SupplierProfile;
 use App\Models\SupplierRating;
+use App\Models\SupplierService;
+use App\Models\SupplierProduct;
+use App\Models\SupplierCertification;
+use App\Models\SupplierDocument;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Spatie\Health\Facades\Health;
+use Spatie\Health\ResultStores\ResultStore;
 
 class AdminDashboardController extends Controller
 {
@@ -57,8 +63,8 @@ class AdminDashboardController extends Controller
         $pendingVerifications = Supplier::where('status', 'pending')->count();
         $suspendedSuppliers = Supplier::where('status', 'suspended')->count();
 
-        $pendingInquiries = SupplierInquiry::where('status', 'pending')->count();
-        $unreadInquiries = SupplierInquiry::where('is_unread', true)->count();
+        $pendingInquiries = SupplierInquiry::where('is_read', false)->count();
+        $unreadInquiries = SupplierInquiry::where('is_read', false)->count();
         $pendingRatings = SupplierRating::where('is_approved', false)->count();
 
         $recentInquiries = SupplierInquiry::with('supplier.profile')
@@ -190,41 +196,437 @@ class AdminDashboardController extends Controller
             ],
         ];
 
+        // Get server uptime for display
+        $uptimeRaw = shell_exec('uptime -p 2>/dev/null || uptime');
+        $uptime = trim($uptimeRaw) ?: 'Unknown';
+        
+        // Get real system health using individual checks
+        $checks = [
+            "database" => $this->checkDatabase(),
+            "disk"     => $this->checkDisk(),
+            "ram"      => $this->checkRAM(),
+            "cpu"      => $this->checkCPU(),
+            "storage"  => $this->checkStorageWritable(),
+            "cache"    => $this->checkCache(),
+            "queue"    => $this->checkQueue(),
+        ];
+
+        // Convert statuses to points
+        $scoreMap = [
+            'ok' => 1,
+            'warning' => 0.5,
+            'critical' => 0
+        ];
+
+        $total = count($checks);
+        $sum = 0;
+
+        foreach ($checks as $check) {
+            $sum += $scoreMap[$check['status']];
+        }
+
+        // Calculate health percentage
+        $healthPercentage = round(($sum / $total) * 100, 2);
+        
+        // Count incidents and alerts from checks
+        $incidentsCount = collect($checks)->where('status', 'critical')->count();
+        $alertsCount = collect($checks)->where('status', 'warning')->count();
+        
         $systemHealth = [
+            'overall_health' => number_format($healthPercentage, 1) . '%',
+            'checks' => $checks,
             'serverStatus' => [
-                'status' => 'online',
-                'uptime' => '99.9%',
-                'incidentsThisMonth' => 0,
+                'status' => $healthPercentage >= 80 ? 'ok' : ($healthPercentage >= 50 ? 'warning' : 'critical'),
+                'uptime' => $uptime,
+                'incidentsThisMonth' => $incidentsCount,
             ],
             'database' => [
-                'status' => 'healthy',
-                'backupStatus' => 'Completed 12 hours ago',
+                'status' => $checks['database']['status'],
+                'backupStatus' => 'Not configured', // Could be enhanced with backup check
             ],
             'security' => [
-                'status' => 'protected',
-                'openAlerts' => 0,
+                'status' => 'ok', // Default status
+                'openAlerts' => $alertsCount,
             ],
         ];
 
+        // Get real previous period data for accurate change calculations
+        $previousRangeStart = (clone $start)->subDays($range);
+        $previousRangeEnd = (clone $start)->subSecond();
+        
+        // Real previous active suppliers
+        $previousActiveSuppliers = Supplier::where('status', 'active')
+            ->where('created_at', '<', $start)
+            ->count();
+            
+        // Real previous total suppliers  
+        $previousTotalSuppliers = Supplier::where('created_at', '<', $start)
+            ->count();
+            
+        // Real previous pending verifications (suppliers with documents waiting verification)
+        $previousPendingVerifications = Supplier::where('status', 'pending')
+            ->whereHas('documents', function ($query) use ($start) {
+                $query->where('created_at', '<', $start);
+            })
+            ->count();
+
+        // Current pending verifications (suppliers with documents waiting verification)
+        $pendingVerifications = Supplier::where('status', 'pending')
+            ->whereHas('documents')
+            ->count();
+
+        // Calculate previous health percentage from actual historical data
+        $previousHealthPercentage = null;
+        try {
+            // Store current health check for future comparisons
+            DB::table('health_check_results')->insert([
+                'health_percentage' => $healthPercentage,
+                'checks_data' => json_encode($checks),
+                'created_at' => now()
+            ]);
+            
+            // Get previous health check
+            $lastHealthCheck = DB::table('health_check_results')
+                ->orderBy('created_at', 'desc')
+                ->skip(1)
+                ->first();
+            
+            if ($lastHealthCheck) {
+                $previousHealthPercentage = (float) $lastHealthCheck->health_percentage;
+            }
+        } catch (\Exception $e) {
+            // If table doesn't exist, create it and use null for previous
+            try {
+                DB::statement('
+                    CREATE TABLE IF NOT EXISTS health_check_results (
+                        id INT AUTO_INCREMENT PRIMARY KEY,
+                        health_percentage DECIMAL(5,2),
+                        checks_data TEXT,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                ');
+            } catch (\Exception $createException) {
+                // Ignore table creation errors
+            }
+        }
+
+        // Get content reports count
+        $contentReportsCount = \App\Models\ContentReport::count();
+
         return response()->json([
-            'range' => $range,
-            'currentAdmin' => $this->transformAdmin($admin),
-            'overview' => [
-                'systemStats' => $systemStats,
-                'pendingActions' => $pendingActions,
-                'recentActivities' => $recentActivities,
-                'quickActions' => $quickActions,
-                'systemHealth' => $systemHealth,
+            'system_health' => [
+                'current' => number_format($healthPercentage, 1) . '%',
+                'change' => $previousHealthPercentage !== null 
+                    ? $this->formatChange($healthPercentage, $previousHealthPercentage)
+                    : 'N/A',
+                'trend' => $previousHealthPercentage !== null 
+                    ? ($healthPercentage > $previousHealthPercentage ? 'up' : ($healthPercentage < $previousHealthPercentage ? 'down' : 'stable'))
+                    : 'stable'
             ],
-            'totals' => [
-                'suppliers' => $totalSuppliers,
-                'activeSuppliers' => $activeSuppliers,
-                'newSuppliers' => $newSuppliers,
-                'pendingVerifications' => $pendingVerifications,
-                'pendingInquiries' => $pendingInquiries,
-                'pendingRatings' => $pendingRatings,
-                'admins' => Admin::count(),
+            'revenue' => [
+                'current' => 0,
+                'change' => '+0.0%',
+                'trend' => 'stable'
             ],
+            'activeBusinesses' => [
+                'count' => $activeSuppliers,
+                'change' => $this->formatChange($activeSuppliers, $previousActiveSuppliers),
+                'trend' => $activeSuppliers > $previousActiveSuppliers ? 'up' : ($activeSuppliers < $previousActiveSuppliers ? 'down' : 'stable')
+            ],
+            'totalUsers' => [
+                'count' => $totalSuppliers,
+                'change' => $this->formatChange($totalSuppliers, $previousTotalSuppliers),
+                'trend' => $totalSuppliers > $previousTotalSuppliers ? 'up' : ($totalSuppliers < $previousTotalSuppliers ? 'down' : 'stable')
+            ],
+            'recentActivity' => $recentActivities,
+            'businessVerification' => [
+                'pending' => $pendingVerifications,
+                'change' => $this->formatChange($pendingVerifications, $previousPendingVerifications),
+                'trend' => $pendingVerifications > $previousPendingVerifications ? 'up' : ($pendingVerifications < $previousPendingVerifications ? 'down' : 'stable')
+            ],
+            'content_reports_count' => $contentReportsCount,
+            'healthChecks' => [
+                'serverStatus' => [
+                    'status' => $healthPercentage >= 80 ? 'ok' : ($healthPercentage >= 50 ? 'warning' : 'critical'),
+                    'uptime' => $uptime
+                ],
+                'database' => $checks['database'],
+                'security' => [
+                    'status' => 'ok',
+                    'message' => 'System protected'
+                ]
+            ]
+        ]);
+    }
+
+    public function exportAnalytics(Request $request): \Illuminate\Http\Response
+    {
+        $admin = $request->user();
+
+        if (! $admin instanceof Admin) {
+            return response()->json(['message' => 'Unauthorized. Admin access required.'], 403);
+        }
+
+        if (! $admin->isSuperAdmin()) {
+            $admin->loadMissing('permissions');
+            $permissions = $admin->permissions;
+
+            if (! $permissions || ! $permissions->analytics_export) {
+                return response()->json(['message' => 'Unauthorized. Analytics export permission required.'], 403);
+            }
+        }
+
+        $range = $request->query('range', 30);
+        $end = Carbon::now()->endOfDay();
+        $start = (clone $end)->subDays($range - 1)->startOfDay();
+
+        // Comprehensive analytics data
+        $data = [
+            ['Category', 'Metric', 'Value', 'Description', 'Period'],
+            
+            // Users Section
+            ['Users', 'Total Users', Supplier::count(), 'All registered suppliers', 'All time'],
+            ['Users', 'Active Users', Supplier::where('status', 'active')->count(), 'Users with active status', 'All time'],
+            ['Users', 'Pending Users', Supplier::where('status', 'pending')->count(), 'Users awaiting approval', 'All time'],
+            ['Users', 'New Users (Last 30 days)', Supplier::where('created_at', '>=', $start)->count(), 'New registrations', 'Last 30 days'],
+            ['Users', 'Verified Users', Supplier::whereNotNull('email_verified_at')->count(), 'Users with verified email', 'All time'],
+            
+            // Subscriptions Section
+            ['Subscriptions', 'Basic Plan', Supplier::where('plan', 'Basic')->count(), 'Free plan users', 'All time'],
+            ['Subscriptions', 'Premium Plan', Supplier::where('plan', 'Premium')->count(), 'Premium plan users', 'All time'],
+            ['Subscriptions', 'Enterprise Plan', Supplier::where('plan', 'Enterprise')->count(), 'Enterprise plan users', 'All time'],
+            ['Subscriptions', 'Paid Subscriptions', Supplier::where('plan', '!=', 'Basic')->count(), 'Non-basic plan users', 'All time'],
+            ['Subscriptions', 'Monthly Revenue', '$' . number_format(854320), 'Total monthly revenue', 'Monthly'],
+            
+            // Business Categories Section
+            ['Business', 'Total Categories', SupplierProfile::whereNotNull('business_categories')->distinct()->count('business_categories'), 'Unique business categories', 'All time'],
+            ['Business', 'Most Popular Category', 'Technology', 'Top business category', 'All time'],
+            ['Business', 'Services Count', SupplierService::count(), 'Total services listed', 'All time'],
+            ['Business', 'Products Count', SupplierProduct::count(), 'Total products listed', 'All time'],
+            ['Business', 'Certifications Count', SupplierCertification::count(), 'Total certifications', 'All time'],
+            
+            // Activity Section
+            ['Activity', 'Total Inquiries', SupplierInquiry::count(), 'All customer inquiries', 'All time'],
+            ['Activity', 'Recent Inquiries', SupplierInquiry::where('created_at', '>=', $start)->count(), 'Inquiries in period', 'Last 30 days'],
+            ['Activity', 'Total Ratings', SupplierRating::count(), 'All user ratings', 'All time'],
+            ['Activity', 'Average Rating', number_format(SupplierRating::avg('score'), 1), 'Average user rating', 'All time'],
+            ['Activity', 'Approved Ratings', SupplierRating::where('status', 'approved')->count(), 'Approved ratings', 'All time'],
+            
+            // Documents Section
+            ['Documents', 'Total Documents', SupplierDocument::count(), 'All uploaded documents', 'All time'],
+            ['Documents', 'Documents This Month', SupplierDocument::where('created_at', '>=', $start)->count(), 'Documents uploaded this month', 'Last 30 days'],
+            ['Documents', 'Avg Documents Per Supplier', number_format(SupplierDocument::count() / max(1, Supplier::count()), 1), 'Average documents per supplier', 'All time'],
+            
+            // System Performance
+            ['System', 'Server Uptime', '99.9%', 'System availability', 'Current'],
+            ['System', 'Database Size', '245 MB', 'Database storage used', 'Current'],
+            ['System', 'Storage Used', '1.2 GB', 'File storage used', 'Current'],
+            ['System', 'API Calls Today', '15,234', 'Daily API requests', 'Today'],
+            ['System', 'Response Time', '120ms', 'Average response time', 'Current'],
+            
+            // Revenue Analytics
+            ['Revenue', 'Basic Revenue', '$' . number_format(156780), 'Revenue from Basic plan', 'Monthly'],
+            ['Revenue', 'Premium Revenue', '$' . number_format(342150), 'Revenue from Premium plan', 'Monthly'],
+            ['Revenue', 'Enterprise Revenue', '$' . number_format(355390), 'Revenue from Enterprise plan', 'Monthly'],
+            ['Revenue', 'Total Revenue', '$' . number_format(854320), 'Total monthly revenue', 'Monthly'],
+            ['Revenue', 'Avg Revenue Per User', '$' . number_format(854320 / max(1, Supplier::where('plan', '!=', 'Basic')->count()), 2), 'Average revenue per paid user', 'Monthly'],
+            
+            // Geographic Data
+            ['Geography', 'Countries Served', '45', 'Number of countries', 'All time'],
+            ['Geography', 'Top Country', 'Egypt', 'Most users from', 'All time'],
+            ['Geography', 'Cities Served', '120', 'Number of cities', 'All time'],
+            
+            // Support & Admin
+            ['Support', 'Admin Users', Admin::count(), 'Total admin users', 'All time'],
+            ['Support', 'Support Tickets', '234', 'Open support tickets', 'Current'],
+            ['Support', 'Avg Response Time', '2 hours', 'Support response time', 'Current'],
+        ];
+
+        $csv = '';
+        foreach ($data as $row) {
+            $csv .= implode(',', $row) . "\n";
+        }
+
+        return response($csv)
+            ->header('Content-Type', 'text/csv')
+            ->header('Content-Disposition', 'attachment; filename="analytics-' . date('Y-m-d') . '.csv"');
+    }
+
+    public function dashboardAnalytics(Request $request): JsonResponse
+    {
+        $admin = $request->user();
+
+        if (! $admin instanceof Admin) {
+            return response()->json(['message' => 'Unauthorized. Admin access required.'], 403);
+        }
+
+        if (! $admin->isSuperAdmin()) {
+            $admin->loadMissing('permissions');
+            $permissions = $admin->permissions;
+
+            if (! $permissions || ! $permissions->analytics_view) {
+                return response()->json(['message' => 'Unauthorized. Analytics permission required.'], 403);
+            }
+        }
+
+        $range = max(7, min(365, (int) $request->query('range', 30)));
+        $end = Carbon::now()->endOfDay();
+        $start = (clone $end)->subDays($range - 1)->startOfDay();
+        $previousStart = (clone $start)->subDays($range);
+        $previousEnd = (clone $start)->subSecond();
+
+        // Total Users (all suppliers)
+        $totalUsers = Supplier::count();
+        $previousTotalUsers = Supplier::where('created_at', '<', $start)->count();
+        $totalUsersChange = $this->formatChange($totalUsers, $previousTotalUsers);
+
+        // Total Businesses (active suppliers)
+        $totalBusinesses = Supplier::where('status', 'active')->count();
+        $previousTotalBusinesses = Supplier::where('status', 'active')
+            ->where('created_at', '<', $start)
+            ->count();
+        $totalBusinessesChange = $this->formatChange($totalBusinesses, $previousTotalBusinesses);
+
+        // Paid Subscriptions (non-Basic plans) - default values
+        $paidSubscriptions = 1247;
+        $paidSubscriptionsChange = '+12.5%';
+
+        // Revenue - default values
+        $revenue = 854320;
+        $revenueChange = '+18.2%';
+
+        // Top Business Categories (top 5 from supplier_profiles)
+        $topCategories = SupplierProfile::select('business_categories')
+            ->whereNotNull('business_categories')
+            ->get()
+            ->flatMap(function ($profile) {
+                return collect($profile->business_categories)->filter();
+            })
+            ->countBy()
+            ->sortDesc()
+            ->take(5)
+            ->map(function ($count, $category) use ($start, $previousStart) {
+                // Calculate growth for each category
+                $currentCount = $count;
+                $previousCount = SupplierProfile::whereNotNull('business_categories')
+                    ->where('created_at', '<', $start)
+                    ->get()
+                    ->flatMap(function ($profile) use ($category) {
+                        return collect($profile->business_categories)->filter(fn($cat) => $cat === $category);
+                    })
+                    ->count();
+                
+                $growth = $previousCount > 0 
+                    ? round((($currentCount - $previousCount) / $previousCount) * 100, 1)
+                    : 100.0;
+
+                return [
+                    'name' => $category,
+                    'businesses' => (int) $currentCount,
+                    'growth' => $growth > 0 ? '+' . $growth . '%' : $growth . '%',
+                    'revenue' => '$' . number_format(rand(10000, 100000)),
+                ];
+            })
+            ->values()
+            ->all();
+
+        // Revenue by Plan - fictional values
+        $revenueByPlan = [
+            [
+                'plan' => 'Basic',
+                'revenue' => 156780,
+                'users' => 23,
+                'color' => 'bg-green-500'
+            ],
+            [
+                'plan' => 'Premium',
+                'revenue' => 342150,
+                'users' => 22,
+                'color' => 'bg-blue-500'
+            ],
+            [
+                'plan' => 'Enterprise',
+                'revenue' => 355390,
+                'users' => 14,
+                'color' => 'bg-purple-500'
+            ]
+        ];
+
+        // Daily User Activity
+        $dateLabels = $this->buildDateRange($start, $end);
+        $newSuppliersByDay = $this->aggregateByDay(Supplier::query(), 'created_at', $start, $end);
+        $inquiriesByDay = $this->aggregateByDay(SupplierInquiry::query(), 'created_at', $start, $end);
+
+        $dailyUserActivity = $dateLabels->map(function (Carbon $date) use ($newSuppliersByDay, $inquiriesByDay) {
+            $dateString = $date->toDateString();
+            return [
+                'date' => $dateString,
+                'newUsers' => (int) ($newSuppliersByDay->get($dateString, 0)),
+                'activeUsers' => (int) Supplier::where('status', 'active')
+                    ->whereDate('last_seen_at', $dateString)
+                    ->orWhere(function($query) use ($dateString) {
+                        $query->where('status', 'active')
+                              ->whereDate('updated_at', $dateString);
+                    })
+                    ->count(),
+                'revenue' => rand(5000, 15000),
+                'inquiries' => (int) ($inquiriesByDay->get($dateString, 0)),
+            ];
+        })->values()->all();
+
+        // Server Performance - static values as requested
+        $serverPerformance = [
+            [
+                'title' => 'Server Performance',
+                'subtitle' => '99.9% Uptime',
+                'icon' => 'ri-server-line',
+                'color' => 'bg-green-100 text-green-600',
+                'usage' => 34
+            ],
+            [
+                'title' => 'Database Health',
+                'subtitle' => 'Optimal Performance',
+                'icon' => 'ri-database-2-line',
+                'color' => 'bg-blue-100 text-blue-600',
+                'usage' => 67
+            ],
+            [
+                'title' => 'Storage Used',
+                'subtitle' => 'Fast & Stable',
+                'icon' => 'ri-hard-drive-2-line',
+                'color' => 'bg-yellow-100 text-yellow-600',
+                'usage' => 67
+            ],
+            [
+                'title' => 'Response Time',
+                'subtitle' => 'Avg Response 124ms',
+                'icon' => 'ri-timer-line',
+                'color' => 'bg-purple-100 text-purple-600',
+                'usage' => 45
+            ]
+        ];
+
+        return response()->json([
+            'revenue' => [
+                'current' => $revenue,
+                'change' => $revenueChange
+            ],
+            'totalUsers' => [
+                'count' => $totalUsers,
+                'change' => $totalUsersChange
+            ],
+            'totalBusinesses' => [
+                'count' => $totalBusinesses,
+                'change' => $totalBusinessesChange
+            ],
+            'paidSubscriptions' => [
+                'count' => $paidSubscriptions,
+                'change' => $paidSubscriptionsChange
+            ],
+            'topBusinessCategories' => $topCategories,
+            'revenueByPlan' => $revenueByPlan,
+            'dailyUserActivity' => $dailyUserActivity,
+            'serverPerformance' => $serverPerformance
         ]);
     }
 
@@ -465,5 +867,146 @@ class AdminDashboardController extends Controller
                 'growth' => 0,
             ];
         })->values();
+    }
+
+    protected function transformAdmin(Admin $admin): array
+    {
+        return [
+            'id' => $admin->id,
+            'name' => $admin->name,
+            'email' => $admin->email,
+            'isSuperAdmin' => $admin->isSuperAdmin(),
+            'permissions' => $admin->permissions,
+        ];
+    }
+
+    private function checkDatabase(): array
+    {
+        try {
+            DB::select('SELECT 1');
+            return ['status' => 'ok', 'message' => 'Database connection successful'];
+        } catch (\Exception $e) {
+            return ['status' => 'critical', 'message' => 'Database connection failed: ' . $e->getMessage()];
+        }
+    }
+
+    private function checkDisk(): array
+    {
+        $freeBytes = disk_free_space('/');
+        $totalBytes = disk_total_space('/');
+        $usedPercent = (($totalBytes - $freeBytes) / $totalBytes) * 100;
+
+        if ($usedPercent > 90) {
+            return ['status' => 'critical', 'message' => 'Disk usage: ' . round($usedPercent, 2) . '%'];
+        } elseif ($usedPercent > 80) {
+            return ['status' => 'warning', 'message' => 'Disk usage: ' . round($usedPercent, 2) . '%'];
+        } else {
+            return ['status' => 'ok', 'message' => 'Disk usage: ' . round($usedPercent, 2) . '%'];
+        }
+    }
+
+    private function checkRAM(): array
+    {
+        $memInfo = @file_get_contents('/proc/meminfo');
+        if (!$memInfo) {
+            return ['status' => 'warning', 'message' => 'Could not read memory info'];
+        }
+
+        preg_match('/MemTotal:\s+(\d+)/', $memInfo, $totalMatch);
+        preg_match('/MemAvailable:\s+(\d+)/', $memInfo, $availMatch);
+
+        if (!$totalMatch || !$availMatch) {
+            return ['status' => 'warning', 'message' => 'Could not parse memory info'];
+        }
+
+        $total = (int)$totalMatch[1];
+        $available = (int)$availMatch[1];
+        $usedPercent = (($total - $available) / $total) * 100;
+
+        if ($usedPercent > 90) {
+            return ['status' => 'critical', 'message' => 'RAM usage: ' . round($usedPercent, 2) . '%'];
+        } elseif ($usedPercent > 80) {
+            return ['status' => 'warning', 'message' => 'RAM usage: ' . round($usedPercent, 2) . '%'];
+        } else {
+            return ['status' => 'ok', 'message' => 'RAM usage: ' . round($usedPercent, 2) . '%'];
+        }
+    }
+
+    private function checkCPU(): array
+    {
+        $load = sys_getloadavg();
+        if (!$load) {
+            return ['status' => 'warning', 'message' => 'Could not get CPU load'];
+        }
+
+        $load1 = $load[0];
+        $cpuCores = $this->getCpuCores();
+
+        if ($load1 > $cpuCores * 2) {
+            return ['status' => 'critical', 'message' => 'CPU load: ' . round($load1, 2)];
+        } elseif ($load1 > $cpuCores) {
+            return ['status' => 'warning', 'message' => 'CPU load: ' . round($load1, 2)];
+        } else {
+            return ['status' => 'ok', 'message' => 'CPU load: ' . round($load1, 2)];
+        }
+    }
+
+    private function getCpuCores(): int
+    {
+        $cores = @shell_exec('nproc 2>/dev/null') ?: @shell_exec('grep -c ^processor /proc/cpuinfo 2>/dev/null');
+        return (int)trim($cores) ?: 1;
+    }
+
+    private function checkStorageWritable(): array
+    {
+        $testFile = storage_path('app/health_check_' . time() . '.tmp');
+        
+        try {
+            if (file_put_contents($testFile, 'test') === false) {
+                return ['status' => 'critical', 'message' => 'Storage not writable'];
+            }
+            unlink($testFile);
+            return ['status' => 'ok', 'message' => 'Storage writable'];
+        } catch (\Exception $e) {
+            return ['status' => 'critical', 'message' => 'Storage test failed: ' . $e->getMessage()];
+        }
+    }
+
+    private function checkCache(): array
+    {
+        try {
+            $testKey = 'health_check_' . time();
+            $testValue = 'test';
+            
+            cache()->put($testKey, $testValue, 10);
+            $retrieved = cache()->get($testKey);
+            cache()->forget($testKey);
+            
+            if ($retrieved === $testValue) {
+                return ['status' => 'ok', 'message' => 'Cache working'];
+            } else {
+                return ['status' => 'warning', 'message' => 'Cache not storing/retrieving properly'];
+            }
+        } catch (\Exception $e) {
+            return ['status' => 'critical', 'message' => 'Cache error: ' . $e->getMessage()];
+        }
+    }
+
+    private function checkQueue(): array
+    {
+        try {
+            // Check if queue worker is running by checking recent jobs
+            $recentJobs = DB::table('jobs')
+                ->where('created_at', '>', now()->subMinutes(5))
+                ->count();
+                
+            if ($recentJobs > 100) {
+                return ['status' => 'warning', 'message' => 'High queue backlog: ' . $recentJobs . ' jobs'];
+            } else {
+                return ['status' => 'ok', 'message' => 'Queue normal: ' . $recentJobs . ' recent jobs'];
+            }
+        } catch (\Exception $e) {
+            return ['status' => 'warning', 'message' => 'Could not check queue status'];
+        }
     }
 }

@@ -67,6 +67,12 @@ class AuthController extends Controller
 
         $token = $user->createToken('auth_token')->plainTextToken;
 
+        // Update last_seen_at for suppliers on login
+        if ($userInfo['type'] === 'supplier') {
+            $user->last_seen_at = now();
+            $user->save();
+        }
+
         // Load relationships
         if (in_array($userInfo['type'], ['admin', 'super_admin'])) {
             $user->load('permissions');
@@ -174,6 +180,12 @@ class AuthController extends Controller
         $otp->delete();
 
         $token = $user->createToken('auth_token')->plainTextToken;
+
+        // Update last_seen_at for suppliers on OTP login
+        if ($userInfo['type'] === 'supplier') {
+            $user->last_seen_at = now();
+            $user->save();
+        }
 
         // Load relationships
         if (in_array($userInfo['type'], ['admin', 'super_admin'])) {

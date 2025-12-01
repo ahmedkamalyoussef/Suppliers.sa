@@ -17,8 +17,10 @@
         "laravel/framework": "^12.0",
         "laravel/sanctum": "^4.0",
         "laravel/tinker": "^2.10.1",
+        "league/csv": "^9.27",
         "prism-php/prism": "^0.98.5",
-        "resend/resend-laravel": "^1.0"
+        "resend/resend-laravel": "^1.0",
+        "spatie/laravel-health": "^1.34"
     },
     "require-dev": {
         "fakerphp/faker": "^1.23",

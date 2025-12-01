@@ -110,6 +110,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::prefix('admin')->group(function () {
         Route::get('/dashboard', [AdminDashboardController::class, 'overview']);
         Route::get('/dashboard/analytics', [AdminDashboardController::class, 'analytics']);
+        Route::get('/dashboard/analytics/v2', [AdminDashboardController::class, 'dashboardAnalytics']);
+        Route::get('/dashboard/analytics/export', [AdminDashboardController::class, 'exportAnalytics']);
         Route::get('/profile', [AdminController::class, 'getProfile']);
         Route::get('/permissions', [AdminController::class, 'getPermissions']);
         Route::put('/profile', [AdminController::class, 'updateProfile']);
