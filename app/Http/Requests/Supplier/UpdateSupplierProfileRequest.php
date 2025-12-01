@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Supplier;
 
+use App\Models\SystemSettings;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -31,6 +32,10 @@ class UpdateSupplierProfileRequest extends FormRequest
 
     public function rules(): array
     {
+        // Get system settings for dynamic validation
+        $systemSettings = SystemSettings::first();
+        $maxDescriptionChars = $systemSettings->maximum_description_characters ?? 1000;
+
         return [
             'name' => ['sometimes', 'string', 'max:255'],
             'businessName' => ['sometimes', 'string', 'max:255'],
@@ -57,7 +62,7 @@ class UpdateSupplierProfileRequest extends FormRequest
             'workingHours.*.close' => ['sometimes', 'string'],
             'website' => ['sometimes', 'nullable', 'string', 'max:255'],
             'address' => ['sometimes', 'nullable', 'string'],
-            'description' => ['sometimes', 'nullable', 'string'],
+            'description' => ['sometimes', 'nullable', 'string', 'max:' . $maxDescriptionChars],
             'contactEmail' => [
                 'sometimes',
                 'email',

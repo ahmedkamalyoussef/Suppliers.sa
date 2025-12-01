@@ -8,6 +8,7 @@ use App\Http\Resources\Supplier\SupplierResource;
 use App\Models\Otp;
 use App\Models\Supplier;
 use App\Models\SupplierProfile;
+use App\Models\SystemSettings;
 use App\Notifications\OtpNotification;
 use App\Services\SupplierProfileService;
 use Illuminate\Http\Request;
@@ -51,6 +52,13 @@ class SupplierAuthController extends Controller
             return response()->json($validator->errors(), 422);
         }
 
+        // Check if auto-approve businesses is enabled
+        $autoApprove = false;
+        $systemSettings = SystemSettings::first();
+        if ($systemSettings && $systemSettings->auto_approve_businesses) {
+            $autoApprove = true;
+        }
+
         $supplier = Supplier::create([
             'name' => $request->business_name,
             'email' => $request->email,
@@ -59,7 +67,7 @@ class SupplierAuthController extends Controller
             'email_verified_at' => null,
             'profile_image' => 'uploads/default.png',
             'plan' => 'Basic',
-            'status' => 'pending',
+            'status' => $autoApprove ? 'active' : 'pending',
             'role' => 'supplier', // Add default role
         ]);
 
@@ -76,8 +84,12 @@ class SupplierAuthController extends Controller
 
         $supplier->load('profile');
 
+        $message = $autoApprove 
+            ? 'Registration successful. Your business has been automatically approved and is now active.'
+            : 'Registration successful. Please verify your email and await admin approval.';
+
         $response = [
-            'message' => 'Registration successful. Please verify your email.',
+            'message' => $message,
             'supplier' => (new SupplierResource($supplier))->toArray($request),
         ];
 

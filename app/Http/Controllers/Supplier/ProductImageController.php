@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Supplier;
 use App\Http\Controllers\Controller;
 use App\Models\Supplier;
 use App\Models\SupplierProductImage;
+use App\Models\SystemSettings;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Storage;
@@ -23,7 +24,12 @@ class ProductImageController extends BaseSupplierController
     public function store(Request $request)
     {
         $supplier = $this->getSupplier();
-        $this->checkLimit($supplier, 'productImages', 8, 'You have reached the maximum number of product images for your plan.');
+        
+        // Get maximum photos limit from system settings
+        $systemSettings = SystemSettings::first();
+        $maxPhotos = $systemSettings->maximum_photos_per_business ?? 10;
+        
+        $this->checkLimit($supplier, 'productImages', $maxPhotos, "You have reached the maximum number of product images ($maxPhotos).");
 
         $validated = $request->validate([
             'image' => 'required|image|max:5120', // 5MB max

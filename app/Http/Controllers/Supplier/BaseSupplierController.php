@@ -16,7 +16,8 @@ class BaseSupplierController extends Controller
 
     protected function checkLimit(Supplier $supplier, string $relation, int $limit, string $message): void
     {
-        if ($supplier->plan === 'Basic' && $supplier->$relation()->count() >= $limit) {
+        // Apply limit to all plans, not just Basic
+        if ($supplier->$relation()->count() >= $limit) {
             abort(403, $message);
         }
     }

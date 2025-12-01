@@ -38,6 +38,10 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Admin\AdminSupplierInquiryController;
 use App\Http\Controllers\Public\TopSuppliersController;
+use App\Http\Controllers\PublicController;
+
+// Public maintenance status (no authentication required)
+Route::get('/maintenance/status', [PublicController::class, 'getMaintenanceStatus']);
 
 // Authenticated user info
 Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
@@ -50,10 +54,10 @@ Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
 ||--------------------------------------------------------------------------
 */
 Route::prefix('auth')->group(function () {
-    Route::post('/login', [AuthController::class, 'login']);
+    Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:5,1');
     Route::post('/logout', [AuthController::class, 'logout'])->middleware('auth:sanctum');
-    Route::post('/send-otp', [AuthController::class, 'sendOtp']);
-    Route::post('/verify-otp', [AuthController::class, 'verifyOtp']);
+    Route::post('/send-otp', [AuthController::class, 'sendOtp'])->middleware('throttle:5,1');
+    Route::post('/verify-otp', [AuthController::class, 'verifyOtp'])->middleware('throttle:5,1');
     // Get user's profile picture (authenticated user or by ID)
     Route::get('/profile/picture/{id?}', [AuthController::class, 'getProfilePicture'])
         ->where('id', '[0-9]+');

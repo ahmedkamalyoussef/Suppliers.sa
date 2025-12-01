@@ -7,9 +7,11 @@ use App\Http\Resources\Supplier\SupplierResource;
 use App\Models\Admin;
 use App\Models\Otp;
 use App\Models\Supplier;
+use App\Models\SystemSettings;
 use App\Notifications\OtpNotification;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
 use Laravel\Sanctum\PersonalAccessToken;
@@ -40,24 +42,42 @@ class AuthController extends Controller
      */
     public function login(Request $request)
     {
-        $validator = Validator::make($request->all(), [
-            'email' => 'required|email',
-            'password' => 'required|string',
-        ]);
+        $request->validate(['email' => ['required', 'email'], 'password' => ['required']]);
 
-        if ($validator->fails()) {
-            return response()->json($validator->errors(), 422);
+        // Check system settings for login attempts
+        $systemSettings = SystemSettings::first();
+        $maxAttempts = $systemSettings->maximum_login_attempts ?? 5;
+        
+        // Simple throttling check
+        $cacheKey = 'login_attempts:' . $request->ip() . ':' . $request->email;
+        $attempts = Cache::get($cacheKey, 0);
+        
+        if ($attempts >= $maxAttempts) {
+            return response()->json([
+                'message' => 'Too many login attempts. Please try again later.',
+                'seconds' => 60,
+                'max_attempts' => $maxAttempts
+            ], 429);
         }
 
         $userInfo = $this->findUserByEmail($request->email);
         if (! $userInfo) {
+            // Increment failed attempts
+            Cache::put($cacheKey, $attempts + 1, 60); // 1 minute
+            
             return response()->json(['message' => 'User not found'], 404);
         }
 
         $user = $userInfo['user'];
         if (! Hash::check($request->password, $user->password)) {
+            // Increment failed attempts
+            Cache::put($cacheKey, $attempts + 1, 60); // 1 minute
+            
             return response()->json(['message' => 'Invalid credentials'], 401);
         }
+
+        // Clear failed attempts on successful login
+        Cache::forget($cacheKey);
 
         // For admins, email verification is optional (can be null)
         // For suppliers, check email verification
