@@ -15,7 +15,7 @@ class AdminSupplierInquiryController extends Controller
             $user = auth()->user();
             
             // Check if user is admin and has permission
-            if (!$user || !($user instanceof \App\Models\Admin) || (!$user->is_super_admin && !$user->hasPermission('content_management_supervise'))) {
+            if (!$user || !($user instanceof \App\Models\Admin) || (!$user->isSuperAdmin() && !$user->hasPermission('content_management_supervise') && !$user->hasPermission('content_management_view'))) {
                 return response()->json(['message' => 'Unauthorized'], 403);
             }
             
@@ -52,5 +52,35 @@ class AdminSupplierInquiryController extends Controller
         return response()->json([
             'message' => 'Reply sent successfully',
         ]);
+    }
+
+    public function getInquiries(Request $request): JsonResponse
+    {
+        $query = SupplierInquiry::query();
+
+        // Exclude inquiries sent by admins
+        $query->where('from', '!=', 'admin');
+
+        // Filter by is_read parameter if provided
+        if ($request->has('isread')) {
+            $isRead = filter_var($request->input('isread'), FILTER_VALIDATE_BOOLEAN);
+            $query->where('is_read', $isRead);
+        }
+
+        $inquiries = $query->get([
+            'id',
+            'sender_id',
+            'full_name',
+            'email_address',
+            'phone_number',
+            'subject',
+            'message',
+            'type',
+            'is_read',
+            'from',
+            'created_at'
+        ]);
+
+        return response()->json($inquiries);
     }
 }

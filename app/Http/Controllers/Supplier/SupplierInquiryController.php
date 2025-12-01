@@ -160,7 +160,8 @@ class SupplierInquiryController extends Controller
         /** @var \Illuminate\Contracts\Auth\Authenticatable|null $authUser */
         $authUser = $request->user();
 
-        if (! $authUser instanceof Supplier && ! $authUser instanceof \App\Models\Admin) {
+        // Allow null user for anonymous submissions
+        if ($authUser && !($authUser instanceof Supplier) && !($authUser instanceof \App\Models\Admin)) {
             abort(403, 'Only suppliers and admins can manage inquiries.');
         }
 
@@ -171,11 +172,6 @@ class SupplierInquiryController extends Controller
     {
         $user = $this->resolveUser($request);
         
-        // Only suppliers can create inquiries
-        if (! $user instanceof Supplier) {
-            abort(403, 'Only suppliers can create inquiries.');
-        }
-
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'email' => 'nullable|email|max:255',
@@ -186,8 +182,21 @@ class SupplierInquiryController extends Controller
             'type' => 'nullable|in:inquiry,reply',
         ]);
 
+        // Handle both authenticated and anonymous users
+        if ($user instanceof Supplier) {
+            // Authenticated supplier
+            $senderId = $user->id;
+            $from = 'supplier';
+            $supplierId = $user->id;
+        } else {
+            // Anonymous user
+            $senderId = 0;
+            $from = 'anonymous';
+            $supplierId = null;
+        }
+
         $inquiry = SupplierInquiry::create([
-            'sender_id' => $user->id,
+            'sender_id' => $senderId,
             'receiver_id' => $validated['receiver_id'] ?? null,
             'full_name' => $validated['name'],
             'email_address' => $validated['email'],
@@ -196,8 +205,9 @@ class SupplierInquiryController extends Controller
             'message' => $validated['message'],
             'type' => $validated['type'] ?? 'inquiry',
             'is_read' => false,
-            'from' => 'supplier',
-            'supplier_id' => $user->id,
+            'from' => $from,
+            'supplier_id' => $supplierId,
+            'is_guest' => !$user instanceof Supplier,
         ]);
 
         return response()->json([

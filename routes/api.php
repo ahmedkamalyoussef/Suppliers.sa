@@ -104,6 +104,9 @@ Route::get('/suppliers/top-rated', [TopSuppliersController::class, 'topRated']);
 Route::get('/suppliers/most-active', [TopSuppliersController::class, 'mostActive']);
 Route::get('/suppliers/most-viewed', [TopSuppliersController::class, 'mostViewed']);
 
+// Public inquiries endpoint (no authentication required)
+Route::post('/supplier/inquiries', [SupplierInquiryController::class, 'store']);
+
 Route::middleware('auth:sanctum')->group(function () {
     // Protected supplier profile endpoint (only owner can view)
     Route::get('/suppliers/{id}', 'App\\Http\\Controllers\\Public\\SupplierProfileController@show');
@@ -133,6 +136,7 @@ Route::middleware('auth:sanctum')->group(function () {
         
         // Admin Supplier Inquiries
         Route::post('/inquiries/reply', [AdminSupplierInquiryController::class, 'reply']);
+        Route::get('/inquiries/list', [AdminSupplierInquiryController::class, 'getInquiries']);
         
         // Admin Supplier Product Images
         Route::get('/suppliers/{supplier}/product-images', [AdminProductImageController::class, 'index']);
@@ -245,7 +249,6 @@ Route::middleware('auth:sanctum')->group(function () {
         // Regular Inquiries (Old)
         Route::prefix('inquiries')->group(function () {
             Route::get('/', [SupplierInquiryController::class, 'index']);
-            Route::post('/', [SupplierInquiryController::class, 'store']);
             Route::get('/unread-count', [SupplierInquiryController::class, 'unreadCount']);
             Route::get('/{inquiry}', [SupplierInquiryController::class, 'show']);
             Route::post('/{inquiry}/reply', [SupplierInquiryController::class, 'reply']);
