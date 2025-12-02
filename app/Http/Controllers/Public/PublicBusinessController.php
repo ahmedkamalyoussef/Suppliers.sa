@@ -301,51 +301,115 @@ private function isOpenNow($hours, string $day, string $now)
     }
 
     private function applyAIFilters(Builder $query, string $aiPrompt): Builder
-    {
-        try {
-            \Log::info('Applying AI search', ['prompt' => $aiPrompt]);
+{
+    try {
+        \Log::info('AI Search: Starting analysis', ['prompt' => $aiPrompt]);
+        
+        $aiService = new AISearchService();
+        $aiResult = $aiService->analyzeQuery($aiPrompt);
+        
+        \Log::info('AI Search: Analysis complete', ['result' => $aiResult]);
+        
+        // Apply search query with synonyms
+        if (isset($aiResult['query']) && !empty($aiResult['query'])) {
+            $searchTerms = $aiResult['query'];
             
-            $aiService = new AISearchService();
-            $aiResult = $aiService->analyzeQuery($aiPrompt);
+            \Log::info('AI Search: Applying keyword search', ['terms' => $searchTerms]);
             
-            \Log::info('AI result received', ['result' => $aiResult]);
+            // Split search terms for broader matching
+            $keywords = array_filter(array_map('trim', explode(' ', $searchTerms)));
             
-            if (isset($aiResult['query'])) {
-                $searchQuery = $aiResult['query'];
-                
-                \Log::info('Applying AI query search', ['query' => $searchQuery]);
-                
-                // Search across all tables with the AI processed query
-                $query->where(function (Builder $builder) use ($searchQuery) {
-                    $builder->where('suppliers.name', 'like', "%{$searchQuery}%")
-                        ->orWhereHas('profile', function (Builder $profileQuery) use ($searchQuery) {
-                            $profileQuery->where('business_name', 'like', "%{$searchQuery}%")
-                                ->orWhere('description', 'like', "%{$searchQuery}%")
-                                ->orWhere('business_address', 'like', "%{$searchQuery}%")
-                                ->orWhereJsonContains('keywords', $searchQuery)
-                                ->orWhereJsonContains('business_categories', $searchQuery)
-                                ->orWhere('business_type', 'like', "%{$searchQuery}%");
+            $query->where(function (Builder $builder) use ($keywords, $searchTerms) {
+                // Search in all relevant fields
+                foreach ($keywords as $keyword) {
+                    $builder->orWhere('suppliers.name', 'like', "%{$keyword}%")
+                        ->orWhereHas('profile', function (Builder $profileQuery) use ($keyword) {
+                            $profileQuery->where('business_name', 'like', "%{$keyword}%")
+                                ->orWhere('description', 'like', "%{$keyword}%")
+                                ->orWhere('business_type', 'like', "%{$keyword}%")
+                                ->orWhereJsonContains('keywords', $keyword)
+                                ->orWhereJsonContains('business_categories', $keyword)
+                                ->orWhere(function($q) use ($keyword) {
+                                    // Search in services_offered JSON
+                                    $q->whereRaw('LOWER(JSON_SEARCH(services_offered, "one", ?)) IS NOT NULL', ["%".strtolower($keyword)."%"]);
+                                });
                         })
-                        ->orWhereHas('services', function (Builder $servicesQuery) use ($searchQuery) {
-                            $servicesQuery->where('service_name', 'like', "%{$searchQuery}%");
+                        ->orWhereHas('services', function (Builder $servicesQuery) use ($keyword) {
+                            $servicesQuery->where('service_name', 'like', "%{$keyword}%");
                         })
-                        ->orWhereHas('products', function (Builder $productsQuery) use ($searchQuery) {
-                            $productsQuery->where('product_name', 'like', "%{$searchQuery}%");
+                        ->orWhereHas('products', function (Builder $productsQuery) use ($keyword) {
+                            $productsQuery->where('product_name', 'like', "%{$keyword}%");
                         });
-                });
-            }
-            
-            return $query;
-            
-        } catch (\Exception $e) {
-            \Log::error('AI Filters Exception', [
-                'prompt' => $aiPrompt,
-                'error' => $e->getMessage()
-            ]);
-            
-            return $query;
+                }
+            });
         }
+        
+        // Apply location filter from AI
+        if (isset($aiResult['location']) && !empty($aiResult['location'])) {
+            $location = $aiResult['location'];
+            \Log::info('AI Search: Applying location filter', ['location' => $location]);
+            
+            $query->whereHas('profile', function (Builder $profileQuery) use ($location) {
+                $profileQuery->where('business_address', 'like', "%{$location}%");
+            });
+        }
+        
+        // Apply rating filter from AI
+        if (isset($aiResult['minRating']) && $aiResult['minRating'] > 0) {
+            $minRating = (int) $aiResult['minRating'];
+            \Log::info('AI Search: Applying rating filter', ['minRating' => $minRating]);
+            
+            $query->having('rating_average', '>=', $minRating);
+        }
+        
+        // Apply open now filter from AI
+        if (isset($aiResult['isOpenNow']) && $aiResult['isOpenNow'] === true) {
+            \Log::info('AI Search: Applying open now filter');
+            
+            $now = now();
+            $dayOfWeek = strtolower($now->format('l'));
+            $currentTime = $now->format('H:i:s');
+            
+            $query->where(function($mainQuery) use ($dayOfWeek, $currentTime) {
+                // Check main profile
+                $mainQuery->whereHas('profile', function($q) use ($dayOfWeek, $currentTime) {
+                    $q->whereJsonLength('working_hours->' . $dayOfWeek, '>', 0)
+                      ->where('working_hours->' . $dayOfWeek . '->closed', false)
+                      ->where('working_hours->' . $dayOfWeek . '->open', '<=', $currentTime)
+                      ->where('working_hours->' . $dayOfWeek . '->close', '>=', $currentTime);
+                })
+                // OR check any branch
+                ->orWhereHas('branches', function($q) use ($dayOfWeek, $currentTime) {
+                    $q->whereJsonLength('working_hours->' . $dayOfWeek, '>', 0)
+                      ->where('working_hours->' . $dayOfWeek . '->closed', false)
+                      ->where('working_hours->' . $dayOfWeek . '->open', '<=', $currentTime)
+                      ->where('working_hours->' . $dayOfWeek . '->close', '>=', $currentTime);
+                });
+            });
+        }
+        
+        \Log::info('AI Search: All filters applied successfully');
+        return $query;
+        
+    } catch (\Exception $e) {
+        \Log::error('AI Search: Exception in applyAIFilters', [
+            'prompt' => $aiPrompt,
+            'error' => $e->getMessage(),
+            'trace' => $e->getTraceAsString()
+        ]);
+        
+        // Fallback: just search the original query
+        $query->where(function (Builder $builder) use ($aiPrompt) {
+            $builder->where('suppliers.name', 'like', "%{$aiPrompt}%")
+                ->orWhereHas('profile', function (Builder $profileQuery) use ($aiPrompt) {
+                    $profileQuery->where('business_name', 'like', "%{$aiPrompt}%")
+                        ->orWhere('description', 'like', "%{$aiPrompt}%");
+                });
+        });
+        
+        return $query;
     }
+}
 
     private function applyFilters(Builder $query, Request $request): Builder
     {
