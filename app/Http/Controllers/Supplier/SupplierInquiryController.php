@@ -91,8 +91,8 @@ class SupplierInquiryController extends Controller
             abort(404);
         }
 
-        if ($inquiry->is_unread) {
-            $inquiry->forceFill(['is_unread' => false])->save();
+        if (!$inquiry->is_read) {
+            $inquiry->update(['is_read' => true]);
         }
 
         return response()->json([
