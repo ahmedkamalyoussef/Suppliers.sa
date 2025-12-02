@@ -145,7 +145,13 @@ private function isOpenNow($hours, string $day, string $now)
 
         // Handle AI parameter
         if ($aiPrompt = $request->input('ai')) {
+            $startTime = microtime(true);
             $suppliers = $this->applyAIFilters($suppliers, $aiPrompt);
+            $endTime = microtime(true);
+            
+            if (($endTime - $startTime) > 5) {
+                \Log::warning('AI search taking too long', ['time' => $endTime - $startTime, 'prompt' => $aiPrompt]);
+            }
         }
 
         $suppliers = $this->applyFilters($suppliers, $request);
@@ -154,7 +160,15 @@ private function isOpenNow($hours, string $day, string $now)
 
         $paginator = $suppliers->paginate($perPage)->appends($request->query());
 
-        $data = $paginator->getCollection()->map(fn (Supplier $supplier) => (new SupplierSummaryResource($supplier))->toArray(request()));
+        try {
+            $data = $paginator->getCollection()->map(fn (Supplier $supplier) => (new SupplierSummaryResource($supplier))->toArray(request()));
+        } catch (\Exception $e) {
+            \Log::error('Error transforming suppliers to resource in index', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            $data = [];
+        }
 
         // Log each supplier that appeared in results
         $appearedSuppliers = $paginator->getCollection()->pluck('id');
@@ -214,7 +228,7 @@ private function isOpenNow($hours, string $day, string $now)
             ->values()
             ->toArray();
 
-        return response()->json([
+        $response = [
             'data' => $data,
             'meta' => [
                 'current_page' => $paginator->currentPage(),
@@ -226,7 +240,18 @@ private function isOpenNow($hours, string $day, string $now)
                 'prompt' => $aiPrompt ?? null,
                 'applied' => !empty($aiPrompt)
             ]
-        ]);
+        ];
+
+        // Add filters if requested
+        if ($request->has('with_filters') && filter_var($request->input('with_filters'), FILTER_VALIDATE_BOOLEAN)) {
+            $response['filters'] = [
+                'categories' => $availableCategories,
+                'locations' => $availableLocations,
+                'business_types' => $availableBusinessTypes
+            ];
+        }
+
+        return response()->json($response);
     }
 
     /**
@@ -310,82 +335,131 @@ private function isOpenNow($hours, string $day, string $now)
         
         \Log::info('AI Search: Analysis complete', ['result' => $aiResult]);
         
-        // Apply search query with synonyms
-        if (isset($aiResult['query']) && !empty($aiResult['query'])) {
-            $searchTerms = $aiResult['query'];
-            
-            \Log::info('AI Search: Applying keyword search', ['terms' => $searchTerms]);
-            
-            // Split search terms for broader matching
-            $keywords = array_filter(array_map('trim', explode(' ', $searchTerms)));
-            
-            $query->where(function (Builder $builder) use ($keywords, $searchTerms) {
-                // Search in all relevant fields
-                foreach ($keywords as $keyword) {
-                    $builder->orWhere('suppliers.name', 'like', "%{$keyword}%")
-                        ->orWhereHas('profile', function (Builder $profileQuery) use ($keyword) {
-                            $profileQuery->where('business_name', 'like', "%{$keyword}%")
-                                ->orWhere('description', 'like', "%{$keyword}%")
-                                ->orWhere('business_type', 'like', "%{$keyword}%")
-                                ->orWhereJsonContains('keywords', $keyword)
-                                ->orWhereJsonContains('business_categories', $keyword)
-                                ->orWhere(function($q) use ($keyword) {
-                                    // Search in services_offered JSON
-                                    $q->whereRaw('LOWER(JSON_SEARCH(services_offered, "one", ?)) IS NOT NULL', ["%".strtolower($keyword)."%"]);
-                                });
-                        })
-                        ->orWhereHas('services', function (Builder $servicesQuery) use ($keyword) {
-                            $servicesQuery->where('service_name', 'like', "%{$keyword}%");
-                        })
-                        ->orWhereHas('products', function (Builder $productsQuery) use ($keyword) {
-                            $productsQuery->where('product_name', 'like', "%{$keyword}%");
-                        });
+        // Apply AI filters - Simplified approach
+        if ($aiPrompt) {
+            // Apply search query with synonyms - MORE FLEXIBLE
+            // Skip keyword search when only rating is specified or when rating is 0
+            $skipKeywordSearch = false;
+            if (isset($aiResult['minRating']) && $aiResult['minRating'] !== null) {
+                // If only rating is specified (no other meaningful keywords), skip keyword search
+                $keywords = array_filter(array_map('trim', explode(' ', $aiResult['query'] ?? '')));
+                $genericKeywords = ['جيد', 'ممتاز', 'موثوق', 'محترم', 'good', 'excellent', 'reliable', 'مورد', 'خدمة', 'شخص', 'شركة', 'supplier', 'service', 'provider', 'business', 'تقيم', 'rating', 'stars', 'نجوم', 'نجمة'];
+                $meaningfulKeywords = array_diff($keywords, $genericKeywords);
+                
+                \Log::info('AI Search: Keyword analysis', [
+                    'all_keywords' => $keywords,
+                    'meaningful_keywords' => $meaningfulKeywords,
+                    'minRating' => $aiResult['minRating']
+                ]);
+                
+                if (count($meaningfulKeywords) === 0 || $aiResult['minRating'] == 0) {
+                    $skipKeywordSearch = true;
+                    \Log::info('AI Search: Skipping keyword search (only rating specified)');
                 }
-            });
-        }
-        
-        // Apply location filter from AI
-        if (isset($aiResult['location']) && !empty($aiResult['location'])) {
-            $location = $aiResult['location'];
-            \Log::info('AI Search: Applying location filter', ['location' => $location]);
+            }
             
-            $query->whereHas('profile', function (Builder $profileQuery) use ($location) {
-                $profileQuery->where('business_address', 'like', "%{$location}%");
-            });
-        }
-        
-        // Apply rating filter from AI
-        if (isset($aiResult['minRating']) && $aiResult['minRating'] > 0) {
-            $minRating = (int) $aiResult['minRating'];
-            \Log::info('AI Search: Applying rating filter', ['minRating' => $minRating]);
-            
-            $query->having('rating_average', '>=', $minRating);
-        }
-        
-        // Apply open now filter from AI
-        if (isset($aiResult['isOpenNow']) && $aiResult['isOpenNow'] === true) {
-            \Log::info('AI Search: Applying open now filter');
-            
-            $now = now();
-            $dayOfWeek = strtolower($now->format('l'));
-            $currentTime = $now->format('H:i:s');
-            
-            $query->where(function($mainQuery) use ($dayOfWeek, $currentTime) {
-                // Check main profile
-                $mainQuery->whereHas('profile', function($q) use ($dayOfWeek, $currentTime) {
-                    $q->whereJsonLength('working_hours->' . $dayOfWeek, '>', 0)
-                      ->where('working_hours->' . $dayOfWeek . '->closed', false)
-                      ->where('working_hours->' . $dayOfWeek . '->open', '<=', $currentTime)
-                      ->where('working_hours->' . $dayOfWeek . '->close', '>=', $currentTime);
-                })
-                // OR check any branch
-                ->orWhereHas('branches', function($q) use ($dayOfWeek, $currentTime) {
-                    $q->whereJsonLength('working_hours->' . $dayOfWeek, '>', 0)
-                      ->where('working_hours->' . $dayOfWeek . '->closed', false)
-                      ->where('working_hours->' . $dayOfWeek . '->open', '<=', $currentTime)
-                      ->where('working_hours->' . $dayOfWeek . '->close', '>=', $currentTime);
+            if (!$skipKeywordSearch && isset($aiResult['query']) && !empty($aiResult['query'])) {
+                $searchTerms = $aiResult['query'];
+                $keywords = array_filter(array_map('trim', explode(' ', $searchTerms)));
+
+                $query->where(function (Builder $builder) use ($keywords) {
+                    // Search in ALL relevant fields with OR logic
+                    foreach ($keywords as $keyword) {
+                        if (mb_strlen($keyword) >= 2) { // Only search meaningful keywords
+                            $builder->orWhere('suppliers.name', 'like', "%{$keyword}%")
+                                ->orWhereHas('profile', function (Builder $profileQuery) use ($keyword) {
+                                    $profileQuery->where('business_name', 'like', "%{$keyword}%")
+                                        ->orWhere('description', 'like', "%{$keyword}%")
+                                        ->orWhere('business_type', 'like', "%{$keyword}%")
+                                        ->orWhereJsonContains('keywords', $keyword)
+                                        ->orWhereJsonContains('business_categories', $keyword)
+                                        ->orWhere('business_categories', 'like', "%{$keyword}%")
+                                        ->orWhere(function($q) use ($keyword) {
+                                            // Search in services_offered JSON
+                                            $q->whereRaw('LOWER(JSON_SEARCH(services_offered, "one", ?)) IS NOT NULL', ["%".strtolower($keyword)."%"]);
+                                        });
+                                })
+                                ->orWhereHas('services', function (Builder $servicesQuery) use ($keyword) {
+                                    $servicesQuery->where('service_name', 'like', "%{$keyword}%");
+                                })
+                                ->orWhereHas('products', function (Builder $productsQuery) use ($keyword) {
+                                    $productsQuery->where('product_name', 'like', "%{$keyword}%");
+                                });
+                        }
+                    }
                 });
-            });
+            }
+
+            // Apply category filter from AI (if found) - ADDITIONAL FILTER, NOT REQUIRED
+            if (isset($aiResult['category']) && !empty($aiResult['category'])) {
+                $category = $aiResult['category'];
+                $query->orWhereHas('profile', function (Builder $profileQuery) use ($category) {
+                    $profileQuery->whereJsonContains('business_categories', $category);
+                });
+            }
+
+            // Apply location filter from AI
+            if (isset($aiResult['location']) && !empty($aiResult['location'])) {
+                $location = $aiResult['location'];
+                $query->whereHas('profile', function (Builder $profileQuery) use ($location) {
+                    $profileQuery->where('business_address', 'like', "%{$location}%");
+                });
+            }
+
+            // Apply minimum rating filter from AI
+            if (isset($aiResult['minRating'])) {
+                $minRating = (int) $aiResult['minRating'];
+                \Log::info('AI Search: Applying rating filter', ['minRating' => $minRating]);
+                
+                // If minRating is 0, show only unrated businesses
+                if ($minRating == 0) {
+                    $query->whereDoesntHave('approvedRatings');
+                }
+                // If minRating is 1, include null ratings (unrated businesses)
+                elseif ($minRating == 1) {
+                    // For rating 1, show businesses with rating <= 1 or no rating
+                    $query->where(function (Builder $builder) {
+                        $builder->whereDoesntHave('approvedRatings')
+                            ->orWhere(function(Builder $subQuery) {
+                                $subQuery->having('rating_average', '<=', 1);
+                            });
+                    });
+                }
+                // If minRating is 2 or less, it's a "bad" rating request - look for low ratings
+                elseif ($minRating <= 2) {
+                    // For bad ratings, show businesses with rating <= 2
+                    $query->having('rating_average', '<=', $minRating);
+                } else {
+                    // For good ratings, show businesses with rating >= minRating
+                    $query->having('rating_average', '>=', $minRating);
+                }
+            }
+
+            // Apply maximum rating filter from AI (NEW)
+            if (isset($aiResult['maxRating'])) {
+                $maxRating = (int) $aiResult['maxRating'];
+                \Log::info('AI Search: Applying max rating filter', ['maxRating' => $maxRating]);
+                
+                // For max rating, show businesses with rating <= maxRating
+                $query->having('rating_average', '<=', $maxRating);
+            }
+
+            // Apply isOpenNow filter from AI
+            if (isset($aiResult['isOpenNow']) && $aiResult['isOpenNow'] === true) {
+                \Log::info('AI Search: Applying open now filter');
+                
+                $now = now();
+                $dayOfWeek = strtolower($now->format('l'));
+                $currentTime = $now->format('H:i');
+                
+                $query->whereHas('branches', function (Builder $branchesQuery) use ($dayOfWeek, $currentTime) {
+                    $branchesQuery->where(function (Builder $dayQuery) use ($dayOfWeek, $currentTime) {
+                        $dayQuery->whereRaw("JSON_EXTRACT(working_hours, '$.{$dayOfWeek}.closed') = false")
+                            ->whereRaw("JSON_EXTRACT(working_hours, '$.{$dayOfWeek}.open') <= ?", [$currentTime])
+                            ->whereRaw("JSON_EXTRACT(working_hours, '$.{$dayOfWeek}.close') >= ?", [$currentTime]);
+                    });
+                });
+            }
         }
         
         \Log::info('AI Search: All filters applied successfully');
