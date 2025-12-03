@@ -29,7 +29,7 @@ class Otp extends Model
             'user_id' => $userId,
             'supplier_id' => null,
             'email' => $email,
-            'otp' => str_pad(random_int(0, 999999), 6, '0', STR_PAD_LEFT),
+            'otp' => str_pad(random_int(0, 9999), 4, '0', STR_PAD_LEFT),
             'expires_at' => now()->addMinutes(10),
         ]);
 
@@ -47,7 +47,7 @@ class Otp extends Model
             'admin_id' => $adminId,
             'supplier_id' => null,
             'email' => $email,
-            'otp' => str_pad(random_int(0, 999999), 6, '0', STR_PAD_LEFT),
+            'otp' => str_pad(random_int(0, 9999), 4, '0', STR_PAD_LEFT),
             'expires_at' => now()->addMinutes(10),
         ]);
 
@@ -65,7 +65,7 @@ class Otp extends Model
             'admin_id' => null,
             'supplier_id' => $supplierId,
             'email' => $email,
-            'otp' => str_pad(random_int(0, 999999), 6, '0', STR_PAD_LEFT),
+            'otp' => str_pad(random_int(0, 9999), 4, '0', STR_PAD_LEFT),
             'expires_at' => now()->addMinutes(10),
         ]);
 

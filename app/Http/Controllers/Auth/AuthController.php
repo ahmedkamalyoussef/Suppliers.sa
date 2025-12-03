@@ -167,7 +167,7 @@ class AuthController extends Controller
     {
         $validator = Validator::make($request->all(), [
             'email' => 'required|email',
-            'otp' => 'required|numeric|digits:6',
+            'otp' => 'required|numeric|digits:4',
         ]);
         if ($validator->fails()) {
             return response()->json($validator->errors(), 422);
@@ -223,7 +223,8 @@ class AuthController extends Controller
         }
 
         return response()->json([
-            'message' => 'Email verified successfully',
+            'message' => 'Login successful',
+            'userType' => $userInfo['type'],
             $payloadKey => $payloadValue,
             'accessToken' => $token,
             'tokenType' => 'Bearer',

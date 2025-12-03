@@ -164,7 +164,7 @@ class SupplierAuthController extends Controller
     {
         $request->validate([
             'email' => ['required', 'email', 'exists:suppliers,email'],
-            'otp' => ['required', 'string', 'size:6'],
+            'otp' => ['required', 'string', 'size:4'],
         ]);
 
         $supplier = Supplier::where('email', $request->email)->first();
