@@ -159,6 +159,21 @@ class SupplierInquiryController extends Controller
     {
         /** @var \Illuminate\Contracts\Auth\Authenticatable|null $authUser */
         $authUser = $request->user();
+        
+        // Try to get user from token manually if not found
+        if (!$authUser) {
+            $token = $request->bearerToken();
+            if ($token) {
+                try {
+                    $accessToken = \Laravel\Sanctum\PersonalAccessToken::findToken($token);
+                    if ($accessToken) {
+                        $authUser = $accessToken->tokenable;
+                    }
+                } catch (\Exception $e) {
+                    // Invalid token, continue as anonymous
+                }
+            }
+        }
 
         // Allow null user for anonymous submissions
         if ($authUser && !($authUser instanceof Supplier) && !($authUser instanceof \App\Models\Admin)) {
@@ -171,6 +186,11 @@ class SupplierInquiryController extends Controller
     public function store(Request $request): JsonResponse
     {
         $user = $this->resolveUser($request);
+        
+        // Debug: Log user info
+        \Log::info('Inquiry store - User type: ' . ($user ? get_class($user) : 'null'));
+        \Log::info('Inquiry store - User ID: ' . ($user?->id ?? 'null'));
+        \Log::info('Inquiry store - Auth user: ' . ($request->user()?->id ?? 'null'));
         
         $validated = $request->validate([
             'name' => 'required|string|max:255',
@@ -190,7 +210,7 @@ class SupplierInquiryController extends Controller
             $supplierId = $user->id;
         } else {
             // Anonymous user
-            $senderId = 0;
+            $senderId = null;
             $from = 'anonymous';
             $supplierId = null;
         }

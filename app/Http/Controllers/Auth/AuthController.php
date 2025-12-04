@@ -247,8 +247,8 @@ class AuthController extends Controller
             return response()->json(['message' => 'User ID is required'], 400);
         }
 
-        // Try to find the user in both admin and supplier tables
-        $user = Admin::find($userId) ?? Supplier::find($userId);
+        // Try to find the user in both admin and supplier tables (check supplier first for profile pictures)
+        $user = Supplier::find($userId) ?? Admin::find($userId);
         
         if (!$user) {
             return response()->json(['message' => 'User not found'], 404);
@@ -257,14 +257,16 @@ class AuthController extends Controller
         // Get the profile image path
         $profileImage = $user->profile_image;
         
-        // Get the media URL using the parent class method
-        $imageUrl = $this->mediaUrl($profileImage);
+        // Get the media URL - use url() directly for better reliability
+        $imageUrl = $profileImage ? url($profileImage) : null;
         
-        if (empty($imageUrl)) {
+        if (empty($imageUrl) || !file_exists(public_path($profileImage))) {
+            // Return default avatar URL
+            $defaultAvatar = url('images/default-avatar.png');
             return response()->json([
-                'message' => 'No profile picture found for this user',
-                'profile_image' => null
-            ], 404);
+                'message' => 'No profile picture found, using default',
+                'profile_image' => $defaultAvatar
+            ], 200);
         }
         
         return response()->json([

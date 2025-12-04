@@ -3,6 +3,11 @@
         Options -MultiViews -Indexes
     </IfModule>
 
+    # Handle PHP files for Hostinger
+    AddHandler application/x-httpd-php .php
+    php_flag display_errors off
+    php_value error_reporting E_ALL & ~E_DEPRECATED & ~E_STRICT
+
     RewriteEngine On
 
     # Handle Authorization Header

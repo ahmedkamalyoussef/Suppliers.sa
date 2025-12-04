@@ -174,7 +174,15 @@ class InboxController extends Controller
     {
         switch ($item->resource_type) {
             case 'supplier_inquiry':
-                return $item->sender_id == $supplierId ? 'sent' : 'received';
+                // Sent by this supplier (and not from admin)
+                if ($item->sender_id == $supplierId && $item->full_name !== 'Admin') {
+                    return 'sent';
+                }
+                // Received by this supplier
+                if ($item->receiver_id == $supplierId) {
+                    return 'received';
+                }
+                return 'received';
             case 'supplier_to_supplier_inquiry':
                 return $item->sender_supplier_id == $supplierId ? 'sent' : 'received';
             case 'message':

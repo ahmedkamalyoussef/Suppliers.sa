@@ -40,6 +40,11 @@ use App\Http\Controllers\Admin\AdminSupplierInquiryController;
 use App\Http\Controllers\Public\TopSuppliersController;
 use App\Http\Controllers\PublicController;
 
+// Simple test route for debugging
+Route::get('/', function () {
+    return response()->json(['message' => 'API is working', 'timestamp' => now()]);
+});
+
 // Public maintenance status (no authentication required)
 Route::get('/maintenance/status', [PublicController::class, 'getMaintenanceStatus']);
 
