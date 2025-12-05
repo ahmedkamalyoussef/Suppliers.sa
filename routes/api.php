@@ -66,8 +66,8 @@ Route::prefix('auth')->group(function () {
     // Get user's profile picture (authenticated user or by ID)
     Route::get('/profile/picture/{id?}', [AuthController::class, 'getProfilePicture'])
         ->where('id', '[0-9]+');
-    Route::post('/forgot-password', [PasswordController::class, 'forgotPassword']);
-    Route::post('/reset-password', [PasswordController::class, 'resetPassword']);
+    Route::post('/forgot-password', [\App\Http\Controllers\Auth\PasswordController::class, 'forgotPassword']);
+    Route::post('/reset-password', [\App\Http\Controllers\Auth\PasswordController::class, 'resetPassword']);
 });
 
 /*
@@ -299,7 +299,7 @@ Route::middleware('auth:sanctum')->group(function () {
         // Profile Category
         Route::patch('/profile/category', function (Request $request) {
             $request->validate([
-                'category' => 'required|string|max:255',
+                'category' => 'nullable|string|max:255',
             ]);
             
             $supplier = $request->user();

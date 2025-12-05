@@ -24,7 +24,7 @@ class SupplierProfileService
         }
 
         // Handle category (independent field)
-        if ($request->has('category')) {
+        if ($request->has('category') && $request->category !== null && $request->category !== '') {
             $profileData['category'] = $request->category;
         }
         

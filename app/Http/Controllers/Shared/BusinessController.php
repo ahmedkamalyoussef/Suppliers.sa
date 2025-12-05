@@ -180,7 +180,7 @@ class BusinessController extends Controller
 
         $validator = Validator::make($request->all(), [
             'business_name' => 'sometimes|required|string|max:255',
-            'category' => 'sometimes|required|string|max:255',
+            'category' => 'sometimes|nullable|string|max:255',
             'business_type' => ['sometimes', 'required', Rule::in(['Supplier', 'Service Provider', 'Manufacturer'])],
             'description' => 'sometimes|required|string|max:2000',
             'phone' => 'sometimes|required|string|max:20',

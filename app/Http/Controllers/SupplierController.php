@@ -173,6 +173,7 @@ class SupplierController extends Controller
                 'website' => $supplier->profile->website ?? null,
                 'contact_email' => $supplier->profile->contact_email ?? null,
                 'description' => $supplier->profile->description ?? null,
+                'keywords' => $supplier->profile->keywords ?? [],
                 'service_distance' => $supplier->profile->service_distance ?? null,
                 'target_market' => is_array($supplier->profile->target_market ?? null) && !empty($supplier->profile->target_market[0]) ? 
                     array_map('trim', explode(',', $supplier->profile->target_market[0])) : 

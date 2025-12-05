@@ -75,6 +75,11 @@ class SupplierInquiryController extends Controller
     {
         $supplier = Auth::user();
         
+        // Check if user is an active supplier
+        if (! $supplier || $supplier->status !== 'active') {
+            return response()->json(['message' => 'Only active suppliers can send inquiries'], 403);
+        }
+        
         $data = $request->validated();
         $data['sender_supplier_id'] = $supplier->id;
         

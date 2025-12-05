@@ -18,6 +18,11 @@ class ReviewReplyController extends Controller
     {
         $supplier = Auth::user();
         
+        // Check if user is an active supplier
+        if (! $supplier || $supplier->status !== 'active') {
+            return response()->json(['message' => 'Only active suppliers can reply to reviews'], 403);
+        }
+        
         // Ensure the supplier is the one being reviewed
         if ($rating->rated_supplier_id !== $supplier->id) {
             return response()->json([
@@ -55,6 +60,11 @@ class ReviewReplyController extends Controller
     {
         $supplier = Auth::user();
         
+        // Check if user is an active supplier
+        if (! $supplier || $supplier->status !== 'active') {
+            return response()->json(['message' => 'Only active suppliers can update review replies'], 403);
+        }
+        
         // Ensure the supplier owns this reply
         if ($reply->supplier_id !== $supplier->id) {
             return response()->json([
@@ -82,6 +92,11 @@ class ReviewReplyController extends Controller
     public function destroy(ReviewReply $reply): JsonResponse
     {
         $supplier = Auth::user();
+        
+        // Check if user is an active supplier
+        if (! $supplier || $supplier->status !== 'active') {
+            return response()->json(['message' => 'Only active suppliers can delete review replies'], 403);
+        }
         
         // Ensure the supplier owns this reply
         if ($reply->supplier_id !== $supplier->id) {

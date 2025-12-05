@@ -17,7 +17,7 @@ class SupplierResource extends JsonResource
         $supplier = $this->resource;
         $withRelations = true;
 
-        $supplier->loadMissing(['profile', 'branches']);
+        $supplier->loadMissing(['profile', 'branches', 'productImages', 'services', 'certifications']);
         $profile = $supplier->profile;
 
         $ratingAverage = $this->extractAggregate($supplier, ['rating_average', 'approved_ratings_avg_score', 'approved_ratings_avg']);
@@ -67,10 +67,12 @@ class SupplierResource extends JsonResource
             'product_images' => $withRelations ? $supplier->productImages->map(function ($image) {
                 return [
                     'id' => $image->id,
-                    'image_url' => $image->image_url,
+                    'image_url' => $image->image_url ? asset($image->image_url) : null,
                     'created_at' => $image->created_at->toIso8601String(),
                     'updated_at' => $image->updated_at->toIso8601String(),
                 ];
+            })->filter(function($image) {
+                return $image['image_url'] !== null;
             })->values() : null,
             'services' => $withRelations ? $supplier->services->map(function ($service) {
                 return [

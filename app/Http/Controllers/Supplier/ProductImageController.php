@@ -50,10 +50,13 @@ class ProductImageController extends BaseSupplierController
         $imageUrl = $destDir . $filename;
         
         $image = $supplier->productImages()->create([
-            'image_url' => url($imageUrl),
+            'image_url' => $imageUrl,
             'name' => $validated['name'] ?? $file->getClientOriginalName(),
         ]);
 
+        // Return the image with full URL using asset()
+        $image->image_url = asset($imageUrl);
+        
         return response()->json($image, 201);
     }
 
@@ -61,8 +64,8 @@ class ProductImageController extends BaseSupplierController
     {
         $this->authorize('delete', $image);
         
-        // Delete file
-        $path = public_path(str_replace(url('/'), '', $image->image_url));
+        // Delete file - image_url is already a relative path
+        $path = public_path($image->image_url);
         if (file_exists($path)) {
             unlink($path);
         }

@@ -108,6 +108,11 @@ class SupplierRatingController extends Controller
     {
         $user = $request->user();
 
+        // Check if user is an active supplier
+        if (! ($user instanceof Supplier) || $user->status !== 'active') {
+            return response()->json(['message' => 'Only active suppliers can rate others'], 403);
+        }
+
         $validator = Validator::make($request->all(), [
             'rated_supplier_id' => 'required|exists:suppliers,id',
             'score' => 'required|integer|min:1|max:5',

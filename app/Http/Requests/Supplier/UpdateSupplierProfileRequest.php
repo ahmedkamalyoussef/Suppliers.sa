@@ -40,7 +40,7 @@ class UpdateSupplierProfileRequest extends FormRequest
             'name' => ['sometimes', 'string', 'max:255'],
             'businessName' => ['sometimes', 'string', 'max:255'],
             'businessType' => ['sometimes', 'string', Rule::in(\App\Support\Constants::BUSINESS_TYPES)],
-            'category' => ['sometimes', 'string', 'max:255'],
+            'category' => ['sometimes', 'nullable', 'string', 'max:255'],
             'categories' => ['sometimes', 'array'],
             'categories.*' => ['string', 'max:255'],
             'services' => ['sometimes', 'array'],

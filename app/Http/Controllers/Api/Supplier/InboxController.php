@@ -80,7 +80,8 @@ class InboxController extends Controller
         $ratings = SupplierRating::with(['rater', 'rated', 'reply'])
             ->where(function($query) use ($supplier) {
                 $query->where('rater_supplier_id', $supplier->id)
-                      ->orWhere('rated_supplier_id', $supplier->id);
+                      ->orWhere('rated_supplier_id', $supplier->id)
+                      ->where('is_approved', true);
             })
             ->get()
             ->map(function ($item) {
@@ -158,10 +159,11 @@ class InboxController extends Controller
         $count += Message::where('receiver_supplier_id', $supplierId)
             ->where('is_read', false)
             ->count();
-
-        // Ratings
-        $count += SupplierRating::where('rated_supplier_id', $supplierId)
+            
+            // Ratings
+            $count += SupplierRating::where('rated_supplier_id', $supplierId)
             ->where('is_read', false)
+            ->where('is_approved', true)
             ->count();
 
         return $count;

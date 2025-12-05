@@ -97,7 +97,7 @@ class AuthController extends Controller
         if (in_array($userInfo['type'], ['admin', 'super_admin'])) {
             $user->load('permissions');
         } elseif ($userInfo['type'] === 'supplier' && method_exists($user, 'profile')) {
-            $user->load('profile', 'branches');
+            $user->load('profile', 'branches', 'productImages');
         }
 
         if (in_array($userInfo['type'], ['admin', 'super_admin'])) {
@@ -105,7 +105,7 @@ class AuthController extends Controller
             $payloadValue = $this->transformAdmin($user);
         } else {
             $payloadKey = 'supplier';
-            $payloadValue = (new SupplierResource($user))->toArray(request());
+            $payloadValue = (new \App\Http\Resources\Supplier\SupplierResource($user))->toArray(request());
         }
 
         return response()->json([
@@ -211,7 +211,7 @@ class AuthController extends Controller
         if (in_array($userInfo['type'], ['admin', 'super_admin'])) {
             $user->load('permissions');
         } elseif (method_exists($user, 'profile')) {
-            $user->load('profile', 'branches');
+            $user->load('profile', 'branches', 'productImages');
         }
 
         if (in_array($userInfo['type'], ['admin', 'super_admin'])) {
@@ -219,7 +219,7 @@ class AuthController extends Controller
             $payloadValue = $this->transformAdmin($user);
         } else {
             $payloadKey = 'supplier';
-            $payloadValue = (new SupplierResource($user))->toArray(request());
+            $payloadValue = (new \App\Http\Resources\Supplier\SupplierResource($user))->toArray(request());
         }
 
         return response()->json([
