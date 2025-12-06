@@ -197,9 +197,10 @@ class AdminDashboardController extends Controller
             ],
         ];
 
-        // Get server uptime for display
-        $uptimeRaw = shell_exec('uptime -p 2>/dev/null || uptime');
-        $uptime = trim($uptimeRaw) ?: 'Unknown';
+        // Get server uptime for display (disabled for shared hosting)
+        // $uptimeRaw = shell_exec('uptime -p 2>/dev/null || uptime');
+        // $uptime = trim($uptimeRaw) ?: 'Unknown';
+        $uptime = 'Available';
         
         // Get real system health using individual checks
         $checks = [
@@ -891,6 +892,10 @@ class AdminDashboardController extends Controller
 
     private function checkDisk(): array
     {
+        // Disabled for shared hosting - disk space functions may be restricted
+        return ['status' => 'ok', 'message' => 'Disk monitoring disabled on shared hosting'];
+        
+        /* Original code - disabled for shared hosting
         $freeBytes = disk_free_space('/');
         $totalBytes = disk_total_space('/');
         $usedPercent = (($totalBytes - $freeBytes) / $totalBytes) * 100;
@@ -902,10 +907,15 @@ class AdminDashboardController extends Controller
         } else {
             return ['status' => 'ok', 'message' => 'Disk usage: ' . round($usedPercent, 2) . '%'];
         }
+        */
     }
 
     private function checkRAM(): array
     {
+        // Disabled for shared hosting - /proc/meminfo not accessible
+        return ['status' => 'ok', 'message' => 'RAM monitoring disabled on shared hosting'];
+        
+        /* Original code - disabled for shared hosting
         $memInfo = @file_get_contents('/proc/meminfo');
         if (!$memInfo) {
             return ['status' => 'warning', 'message' => 'Could not read memory info'];
@@ -929,10 +939,15 @@ class AdminDashboardController extends Controller
         } else {
             return ['status' => 'ok', 'message' => 'RAM usage: ' . round($usedPercent, 2) . '%'];
         }
+        */
     }
 
     private function checkCPU(): array
     {
+        // Disabled for shared hosting - sys_getloadavg() not available
+        return ['status' => 'ok', 'message' => 'CPU monitoring disabled on shared hosting'];
+        
+        /* Original code - disabled for shared hosting
         $load = sys_getloadavg();
         if (!$load) {
             return ['status' => 'warning', 'message' => 'Could not get CPU load'];
@@ -948,12 +963,18 @@ class AdminDashboardController extends Controller
         } else {
             return ['status' => 'ok', 'message' => 'CPU load: ' . round($load1, 2)];
         }
+        */
     }
 
     private function getCpuCores(): int
     {
+        // Disabled for shared hosting - shell commands not allowed
+        return 1;
+        
+        /* Original code - disabled for shared hosting
         $cores = @shell_exec('nproc 2>/dev/null') ?: @shell_exec('grep -c ^processor /proc/cpuinfo 2>/dev/null');
         return (int)trim($cores) ?: 1;
+        */
     }
 
     private function checkStorageWritable(): array
