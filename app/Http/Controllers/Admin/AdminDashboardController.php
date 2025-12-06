@@ -395,9 +395,8 @@ class AdminDashboardController extends Controller
             // Subscriptions Section
             ['Subscriptions', 'Basic Plan', Supplier::where('plan', 'Basic')->count(), 'Free plan users', 'All time'],
             ['Subscriptions', 'Premium Plan', Supplier::where('plan', 'Premium')->count(), 'Premium plan users', 'All time'],
-            ['Subscriptions', 'Enterprise Plan', Supplier::where('plan', 'Enterprise')->count(), 'Enterprise plan users', 'All time'],
-            ['Subscriptions', 'Paid Subscriptions', Supplier::where('plan', '!=', 'Basic')->count(), 'Non-basic plan users', 'All time'],
-            ['Subscriptions', 'Monthly Revenue', '$' . number_format(854320), 'Total monthly revenue', 'Monthly'],
+            ['Subscriptions', 'Paid Subscriptions', Supplier::where('plan', 'Premium')->count(), 'Premium plan users', 'All time'],
+            ['Subscriptions', 'Monthly Revenue', '$' . number_format(0), 'Total monthly revenue', 'Monthly'],
             
             // Business Categories Section
             ['Business', 'Total Categories', SupplierProfile::whereNotNull('business_categories')->distinct()->count('business_categories'), 'Unique business categories', 'All time'],
@@ -428,7 +427,6 @@ class AdminDashboardController extends Controller
             // Revenue Analytics
             ['Revenue', 'Basic Revenue', '$' . number_format(156780), 'Revenue from Basic plan', 'Monthly'],
             ['Revenue', 'Premium Revenue', '$' . number_format(342150), 'Revenue from Premium plan', 'Monthly'],
-            ['Revenue', 'Enterprise Revenue', '$' . number_format(355390), 'Revenue from Enterprise plan', 'Monthly'],
             ['Revenue', 'Total Revenue', '$' . number_format(854320), 'Total monthly revenue', 'Monthly'],
             ['Revenue', 'Avg Revenue Per User', '$' . number_format(854320 / max(1, Supplier::where('plan', '!=', 'Basic')->count()), 2), 'Average revenue per paid user', 'Monthly'],
             
@@ -488,13 +486,16 @@ class AdminDashboardController extends Controller
             ->count();
         $totalBusinessesChange = $this->formatChange($totalBusinesses, $previousTotalBusinesses);
 
-        // Paid Subscriptions (non-Basic plans) - default values
-        $paidSubscriptions = 1247;
-        $paidSubscriptionsChange = '+12.5%';
+        // Paid Subscriptions (Premium plans only) - actual database value
+        $paidSubscriptions = Supplier::where('plan', 'Premium')->count();
+        $previousPaidSubscriptions = Supplier::where('plan', 'Premium')
+            ->where('created_at', '<', $start)
+            ->count();
+        $paidSubscriptionsChange = $this->formatChange($paidSubscriptions, $previousPaidSubscriptions);
 
-        // Revenue - default values
-        $revenue = 854320;
-        $revenueChange = '+18.2%';
+        // Revenue - set to 0
+        $revenue = 0;
+        $revenueChange = '+0.0%';
 
         // Top Business Categories (top 5 from supplier_profiles)
         $topCategories = SupplierProfile::select('business_categories')
@@ -525,31 +526,28 @@ class AdminDashboardController extends Controller
                     'name' => $category,
                     'businesses' => (int) $currentCount,
                     'growth' => $growth > 0 ? '+' . $growth . '%' : $growth . '%',
-                    'revenue' => '$' . number_format(rand(10000, 100000)),
+                    'revenue' => '$' . number_format(0),
                 ];
             })
             ->values()
             ->all();
 
-        // Revenue by Plan - fictional values
+        // Revenue by Plan - actual user counts with zero revenue
+        $basicUsers = Supplier::where('plan', 'Basic')->count();
+        $premiumUsers = Supplier::where('plan', 'Premium')->count();
+        
         $revenueByPlan = [
             [
                 'plan' => 'Basic',
-                'revenue' => 156780,
-                'users' => 23,
+                'revenue' => 0,
+                'users' => $basicUsers,
                 'color' => 'bg-green-500'
             ],
             [
                 'plan' => 'Premium',
-                'revenue' => 342150,
-                'users' => 22,
+                'revenue' => 0,
+                'users' => $premiumUsers,
                 'color' => 'bg-blue-500'
-            ],
-            [
-                'plan' => 'Enterprise',
-                'revenue' => 355390,
-                'users' => 14,
-                'color' => 'bg-purple-500'
             ]
         ];
 
@@ -570,7 +568,7 @@ class AdminDashboardController extends Controller
                               ->whereDate('updated_at', $dateString);
                     })
                     ->count(),
-                'revenue' => rand(5000, 15000),
+                'revenue' => 0,
                 'inquiries' => (int) ($inquiriesByDay->get($dateString, 0)),
             ];
         })->values()->all();
@@ -700,7 +698,7 @@ class AdminDashboardController extends Controller
             ->map(function ($row) {
                 $plan = $row->plan ?? 'Basic';
                 $baseRevenue = match (strtolower($plan)) {
-                    'enterprise' => 24900,
+                    
                     'premium' => 15900,
                     default => 6900,
                 };
@@ -842,7 +840,7 @@ class AdminDashboardController extends Controller
     private function planColor(string $plan): string
     {
         return match (strtolower($plan)) {
-            'enterprise' => 'bg-purple-500',
+
             'premium' => 'bg-blue-500',
             default => 'bg-green-500',
         };

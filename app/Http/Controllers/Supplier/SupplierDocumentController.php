@@ -46,7 +46,11 @@ class SupplierDocumentController extends Controller
         $document = SupplierDocument::create([
             'supplier_id' => $supplier->id,
             'file_path' => $filePath,
+            'status' => 'pending',
         ]);
+
+        // Update supplier status to pending when document is uploaded
+        $supplier->update(['status' => 'pending']);
 
         return response()->json([
             'message' => 'Document uploaded successfully and pending verification. Any existing documents were removed.',
@@ -86,7 +90,11 @@ class SupplierDocumentController extends Controller
 
         $document->forceFill([
             'file_path' => $filePath,
+            'status' => 'pending',
         ])->save();
+
+        // Update supplier status to pending when document is resubmitted
+        $supplier->update(['status' => 'pending']);
 
         return response()->json([
             'message' => 'Document resubmitted successfully.',

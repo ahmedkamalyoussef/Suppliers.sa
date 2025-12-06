@@ -60,7 +60,7 @@ class PasswordController extends Controller
             : Otp::generateForSupplier($user->id, $user->email);
 
         // إرسال OTP عبر الإيميل
-        $user->notify(new OtpNotification($otp->otp));
+        $user->notify(new OtpNotification($otp->otp, 10, 'password_reset'));
 
         return response()->json([
             'message' => 'Password reset OTP has been sent to your email.',

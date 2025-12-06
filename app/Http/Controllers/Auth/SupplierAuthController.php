@@ -40,7 +40,9 @@ class SupplierAuthController extends Controller
                 'string',
                 'email',
                 'max:255',
-                Rule::unique('suppliers', 'email'),
+                Rule::unique('suppliers', 'email')->where(function ($query) {
+                    return $query->whereNotNull('email_verified_at');
+                }),
                 Rule::unique('admins', 'email'),
             ],
             'phone' => ['required', 'string', 'max:20'],
@@ -50,6 +52,43 @@ class SupplierAuthController extends Controller
 
         if ($validator->fails()) {
             return response()->json($validator->errors(), 422);
+        }
+
+        // Check if supplier exists but is not verified
+        $existingSupplier = Supplier::where('email', $request->email)
+            ->whereNull('email_verified_at')
+            ->first();
+
+        if ($existingSupplier) {
+            // Update existing supplier data
+            $existingSupplier->update([
+                'name' => $request->business_name,
+                'password' => Hash::make($request->password),
+                'phone' => $request->phone,
+                'email_verified_at' => null, // Keep as null for new verification
+                'status' => 'pending', // Reset to pending
+            ]);
+
+            // Update profile
+            if ($existingSupplier->profile) {
+                $existingSupplier->profile->update([
+                    'business_name' => $request->business_name,
+                    'main_phone' => $request->phone,
+                    'contact_email' => $request->email,
+                ]);
+                $existingSupplier->profile->slug = $this->generateUniqueSupplierSlug($request->business_name, $existingSupplier->profile->id);
+                $existingSupplier->profile->save();
+            }
+
+            $supplier = $existingSupplier;
+            $message = 'Registration successful. Please verify your email to activate your account.';
+            
+            $response = [
+                'message' => $message,
+                'supplier' => (new SupplierResource($supplier))->toArray($request),
+            ];
+
+            return response()->json($response, 201);
         }
 
         // Check if auto-approve businesses is enabled
@@ -149,7 +188,7 @@ class SupplierAuthController extends Controller
         }
 
         $otp = Otp::generateForSupplier($supplier->id, $supplier->email);
-        $supplier->notify(new OtpNotification($otp->otp, 10));
+        $supplier->notify(new OtpNotification($otp->otp, 10, 'verification'));
 
         $response = ['message' => 'OTP sent successfully'];
 
@@ -497,20 +536,10 @@ class SupplierAuthController extends Controller
 
     public function deleteAccount(Request $request)
     {
-        $request->validate([
-            'password' => ['required', 'string'],
-            'confirmation' => ['required', 'string', 'in:DELETE'],
-        ]);
-
         $supplier = $request->user();
         
         if (! ($supplier instanceof Supplier)) {
             return response()->json(['message' => 'Unauthorized'], 403);
-        }
-
-        // Verify password for security
-        if (! Hash::check($request->password, $supplier->password)) {
-            return response()->json(['message' => 'Invalid password'], 401);
         }
 
         // Delete profile image if exists
