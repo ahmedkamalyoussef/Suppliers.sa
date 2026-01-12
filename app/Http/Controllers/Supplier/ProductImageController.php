@@ -18,6 +18,11 @@ class ProductImageController extends BaseSupplierController
         $supplier = $this->getSupplier();
         $images = $supplier->productImages()->get(['id', 'image_url', 'name']);
         
+        // Convert relative paths to full URLs
+        $images->each(function ($image) {
+            $image->image_url = asset($image->image_url);
+        });
+        
         return response()->json($images);
     }
 

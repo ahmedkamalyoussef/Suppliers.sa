@@ -7,6 +7,7 @@ use App\Http\Controllers\Admin\AdminDashboardController;
 use App\Http\Controllers\Admin\AdminDocumentController;
 use App\Http\Controllers\Admin\AdminContentReportController;
 use App\Http\Controllers\Admin\AdminController;
+use App\Http\Controllers\PartnershipController;
 use App\Http\Controllers\Auth\AuthController;
 use App\Http\Controllers\Supplier\SupplierInquiryController;
 use App\Http\Controllers\Auth\SupplierAuthController;
@@ -112,6 +113,9 @@ Route::get('/suppliers/most-viewed', [TopSuppliersController::class, 'mostViewed
 // Public inquiries endpoint (no authentication required)
 Route::post('/supplier/inquiries', [SupplierInquiryController::class, 'store']);
 
+// Public partnerships endpoint (no authentication required)
+Route::get('/partnerships', [PartnershipController::class, 'index']);
+
 Route::middleware('auth:sanctum')->group(function () {
     // Protected supplier profile endpoint (only owner can view)
     Route::get('/suppliers/{id}', 'App\\Http\\Controllers\\Public\\SupplierProfileController@show');
@@ -180,6 +184,11 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/reports/{report}/dismiss', [AdminContentReportController::class, 'dismiss']);
         Route::post('/reports/{report}/takedown', [AdminContentReportController::class, 'takedown']);
         Route::post('/reports/{report}/status', [AdminContentReportController::class, 'updateStatus']);
+        
+        // Partnerships (Content Management)
+        Route::post('/partnerships', [PartnershipController::class, 'store']);
+        Route::put('/partnerships/{id}', [PartnershipController::class, 'update']);
+        Route::delete('/partnerships/{id}', [PartnershipController::class, 'destroy']);
         
         // Admin Supplier Inquiries
         Route::get('/inquiries', [SupplierInquiryController::class, 'index']);
@@ -312,6 +321,9 @@ Route::middleware('auth:sanctum')->group(function () {
                 'category' => $request->category
             ]);
         });
+        
+        // Get Supplier Location
+        Route::get('/location', [SupplierAuthController::class, 'getLocation']);
         
         // Ratings
         Route::get('/ratings', [SupplierRatingController::class, 'index']);

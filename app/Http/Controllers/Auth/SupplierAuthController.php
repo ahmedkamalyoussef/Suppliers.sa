@@ -48,6 +48,7 @@ class SupplierAuthController extends Controller
             'phone' => ['required', 'string', 'max:20'],
             'password' => ['required', 'string', 'min:6', 'confirmed'],
             'password_confirmation' => ['required', 'string', 'min:6'],
+            'accept_policies' => ['required', 'boolean', 'accepted'],
         ]);
 
         if ($validator->fails()) {
@@ -566,5 +567,34 @@ class SupplierAuthController extends Controller
         $supplier->delete();
 
         return response()->json(['message' => 'Account deleted successfully']);
+    }
+
+    /**
+     * Get supplier location coordinates
+     */
+    public function getLocation(Request $request)
+    {
+        $supplier = $request->user();
+        
+        if (! ($supplier instanceof Supplier)) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
+        // Load the supplier's profile to get location data
+        $supplier->load('profile');
+        
+        if (! $supplier->profile) {
+            return response()->json([
+                'message' => 'Profile not found',
+                'latitude' => null,
+                'longitude' => null
+            ], 404);
+        }
+
+        return response()->json([
+            'latitude' => $supplier->profile->latitude,
+            'longitude' => $supplier->profile->longitude,
+            'address' => $supplier->profile->business_address
+        ]);
     }
 }
