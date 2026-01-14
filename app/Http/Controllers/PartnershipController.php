@@ -30,7 +30,7 @@ class PartnershipController extends Controller
             }
 
             return $next($request);
-        });
+        })->except(['index']);
     }
 
     public function store(Request $request)
@@ -81,12 +81,15 @@ class PartnershipController extends Controller
         }
 
         $request->validate([
-            'name' => ['required', 'string', 'max:255'],
+            'name' => ['nullable', 'string', 'max:255'],
             'image' => ['nullable', 'image', 'max:2048'],
         ]);
 
         $partnership = Partnership::findOrFail($id);
-        $partnership->name = $request->name;
+        
+        if ($request->has('name')) {
+            $partnership->name = $request->name;
+        }
 
         if ($request->hasFile('image')) {
             // Delete old image if exists

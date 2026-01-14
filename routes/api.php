@@ -187,7 +187,7 @@ Route::middleware('auth:sanctum')->group(function () {
         
         // Partnerships (Content Management)
         Route::post('/partnerships', [PartnershipController::class, 'store']);
-        Route::put('/partnerships/{id}', [PartnershipController::class, 'update']);
+        Route::post('/partnerships/{id}', [PartnershipController::class, 'update']);
         Route::delete('/partnerships/{id}', [PartnershipController::class, 'destroy']);
         
         // Admin Supplier Inquiries

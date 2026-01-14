@@ -130,10 +130,6 @@ class BranchController extends Controller
             return response()->json(['message' => 'Unauthorized'], 403);
         }
 
-        if ($branch->is_main_branch) {
-            return response()->json(['message' => 'Cannot delete main branch'], 400);
-        }
-
         $branch->delete();
 
         return response()->json(['message' => 'Branch deleted successfully']);

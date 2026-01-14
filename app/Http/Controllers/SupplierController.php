@@ -165,7 +165,7 @@ class SupplierController extends Controller
 
         return response()->json([
             'id' => $supplier->id,
-            'name' => $supplier->name,
+            'name' => $supplier->profile->business_name ?? $supplier->name,
             'status' => $supplier->status,
             'profile' => [
                 'business_type' => $supplier->profile->business_type ?? null,
