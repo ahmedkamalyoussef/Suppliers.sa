@@ -39,6 +39,7 @@ use App\Http\Controllers\PublicBusinessesStatisticsController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Admin\AdminSupplierInquiryController;
+use App\Http\Controllers\Admin\AdminEmailController;
 use App\Http\Controllers\Public\TopSuppliersController;
 use App\Http\Controllers\PublicController;
 
@@ -204,6 +205,10 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/inquiries/{inquiry}/read', [SupplierInquiryController::class, 'markRead']);
         Route::put('/inquiries/{inquiry}/status', [SupplierInquiryController::class, 'updateStatus']);
         Route::get('/inquiries/unread/count', [SupplierInquiryController::class, 'unreadCount']);
+        
+        // Email Management (Admin Only)
+        Route::post('/email/send', [AdminEmailController::class, 'sendEmail']);
+        Route::post('/email/send-bulk', [AdminEmailController::class, 'sendBulkEmail']);
     });
 
     // Admin Management (Super Admin Only)
