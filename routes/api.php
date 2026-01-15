@@ -40,6 +40,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Admin\AdminSupplierInquiryController;
 use App\Http\Controllers\Admin\AdminEmailController;
+use App\Http\Controllers\Admin\AdminSupplierCommunicationController;
 use App\Http\Controllers\Public\TopSuppliersController;
 use App\Http\Controllers\PublicController;
 
@@ -209,6 +210,10 @@ Route::middleware('auth:sanctum')->group(function () {
         // Email Management (Admin Only)
         Route::post('/email/send', [AdminEmailController::class, 'sendEmail']);
         Route::post('/email/send-bulk', [AdminEmailController::class, 'sendBulkEmail']);
+        
+        // Supplier Communications (Admin Only)
+        Route::get('/communications', [AdminSupplierCommunicationController::class, 'getCommunications']);
+        Route::get('/communications/summary', [AdminSupplierCommunicationController::class, 'getCommunicationSummary']);
     });
 
     // Admin Management (Super Admin Only)
