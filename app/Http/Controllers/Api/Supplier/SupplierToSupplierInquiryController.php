@@ -169,7 +169,7 @@ class SupplierToSupplierInquiryController extends Controller
             'sender_name' => $supplier->name,
             'email' => $supplier->email,
             'phone' => $supplier->phone,
-            'subject' => 'Re: ' . $inquiry->subject,
+            'subject' => $inquiry->subject,
             'message' => $request->message,
             'parent_id' => $inquiry->id,
             'is_read' => false,

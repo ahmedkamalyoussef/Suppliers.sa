@@ -71,7 +71,7 @@ echo json_encode([
             'receiver_id' => 1,
             'receiver_name' => 'Supplier One',
             'receiver_email' => 'supplier1@example.com',
-            'subject' => 'Re: Business Partnership',
+            'subject' => 'Business Partnership',
             'message' => 'Thank you for your interest...',
             'message_type' => 'message',
             'is_read' => true,

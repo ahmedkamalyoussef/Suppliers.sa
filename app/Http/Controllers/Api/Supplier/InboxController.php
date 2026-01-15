@@ -339,7 +339,7 @@ class InboxController extends Controller
                     'email' => $supplier->email,
                     'phone' => $supplier->phone,
                     'company' => $supplier->profile->company_name ?? null,
-                    'subject' => 'Re: ' . $originalInquiry->subject,
+                    'subject' => $originalInquiry->subject,
                     'message' => $replyText,
                     'parent_id' => $originalInquiry->id,
                     'is_read' => false,
@@ -382,9 +382,6 @@ class InboxController extends Controller
 
                 // Set subject without duplicating "Re:" prefix
                 $subject = $originalMessage->subject;
-                if (!str_starts_with($subject, 'Re: ')) {
-                    $subject = 'Re: ' . $subject;
-                }
 
                 $reply = Message::create([
                     'sender_supplier_id' => $supplier->id,
@@ -484,7 +481,7 @@ class InboxController extends Controller
 
         foreach ($receivedMessages as $message) {
             // Find reply message from this supplier to the original sender
-            $reply = Message::where('subject', 'like', 'Re: ' . $message->subject)
+            $reply = Message::where('subject', $message->subject)
                 ->where('sender_supplier_id', $supplierId)
                 ->where('receiver_supplier_id', $message->sender_supplier_id)
                 ->where('created_at', '>', $message->created_at)
@@ -504,7 +501,7 @@ class InboxController extends Controller
 
         foreach ($receivedAdminInquiries as $inquiry) {
             // Find reply from supplier to admin
-            $reply = SupplierInquiry::where('subject', 'like', 'Re: ' . $inquiry->subject)
+            $reply = SupplierInquiry::where('subject', $inquiry->subject)
                 ->where('supplier_id', $supplierId)
                 ->where('from', 'supplier')
                 ->where('created_at', '>', $inquiry->created_at)

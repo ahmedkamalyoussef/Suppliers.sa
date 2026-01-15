@@ -86,7 +86,7 @@ class InboxItemResource extends JsonResource
             case 'supplier_rating':
                 return 'Review from ' . ($this->rater->name ?? 'Unknown');
             case 'review_reply':
-                return 'Re: Review Reply';
+                return 'Review Reply';
             default:
                 return 'Unknown';
         }
