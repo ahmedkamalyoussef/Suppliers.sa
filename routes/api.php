@@ -35,6 +35,7 @@ use App\Http\Controllers\Supplier\ServiceController;
 use App\Http\Controllers\Supplier\SupplierProductController;
 use App\Http\Controllers\Supplier\CertificationController;
 use App\Http\Controllers\Api\Supplier\BusinessRequestController;
+use App\Http\Controllers\PublicBusinessesStatisticsController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Admin\AdminSupplierInquiryController;
@@ -116,6 +117,9 @@ Route::post('/supplier/inquiries', [SupplierInquiryController::class, 'store']);
 // Public partnerships endpoint (no authentication required)
 Route::get('/partnerships', [PartnershipController::class, 'index']);
 
+// Public businesses statistics endpoints
+Route::get('/public/businesses-statistics', [PublicBusinessesStatisticsController::class, 'index']);
+
 Route::middleware('auth:sanctum')->group(function () {
     // Protected supplier profile endpoint (only owner can view)
     Route::get('/suppliers/{id}', 'App\\Http\\Controllers\\Public\\SupplierProfileController@show');
@@ -189,6 +193,9 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/partnerships', [PartnershipController::class, 'store']);
         Route::post('/partnerships/{id}', [PartnershipController::class, 'update']);
         Route::delete('/partnerships/{id}', [PartnershipController::class, 'destroy']);
+        
+        // Businesses Statistics Management
+        Route::put('/businesses-statistics', [PublicBusinessesStatisticsController::class, 'update']);
         
         // Admin Supplier Inquiries
         Route::get('/inquiries', [SupplierInquiryController::class, 'index']);
