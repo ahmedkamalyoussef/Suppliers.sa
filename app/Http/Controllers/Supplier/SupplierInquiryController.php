@@ -28,10 +28,11 @@ class SupplierInquiryController extends Controller
             }
         } else {
             // Admin can see all inquiries, especially those with null receiver_id (general admin inquiries)
-            $query = SupplierInquiry::where(function($q) {
-                $q->whereNull('receiver_id')
-                  ->orWhereNotNull('receiver_id');
-            });
+            // and inquiries sent TO admin, but NOT inquiries sent BY admin to suppliers
+            $query = SupplierInquiry::where(function($q) use ($user) {
+                $q->whereNull('receiver_id')  // General admin inquiries
+                  ->orWhere('receiver_id', $user->id);  // Inquiries sent TO this admin
+            })->where('from', '!=', 'admin');  // Exclude inquiries sent BY admin
         }
 
         if ($status = $request->query('status')) {
@@ -208,6 +209,11 @@ class SupplierInquiryController extends Controller
             $senderId = $user->id;
             $from = 'supplier';
             $supplierId = $user->id;
+        } elseif ($user instanceof \App\Models\Admin) {
+            // Authenticated admin
+            $senderId = $user->id;
+            $from = 'admin';
+            $supplierId = $validated['receiver_id'] ?? null; // Use receiver_id as supplier_id for admin
         } else {
             // Anonymous user
             $senderId = null;
@@ -227,7 +233,7 @@ class SupplierInquiryController extends Controller
             'is_read' => false,
             'from' => $from,
             'supplier_id' => $supplierId,
-            'is_guest' => !$user instanceof Supplier,
+            'is_guest' => !$user instanceof Supplier && !$user instanceof \App\Models\Admin,
         ]);
 
         return response()->json([
