@@ -12,13 +12,13 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('business_requests', function (Blueprint $table) {
-            $table->enum('requestType', ['product', 'pricing', 'contact', 'productRequest', 'pricingRequest', 'contactRequest', 'طلب منتج', 'تسعيره', 'تواصل'])->change();
+            $table->enum('requestType', ['product', 'pricing', 'contact', 'productRequest', 'pricingRequest', 'contactRequest'])->change();
         });
 
         // Update existing data
-        \DB::statement("UPDATE business_requests SET requestType = 'product' WHERE requestType IN ('productRequest', 'طلب منتج')");
-        \DB::statement("UPDATE business_requests SET requestType = 'pricing' WHERE requestType IN ('pricingRequest', 'تسعيره')");
-        \DB::statement("UPDATE business_requests SET requestType = 'contact' WHERE requestType IN ('contactRequest', 'تواصل')");
+        \DB::statement("UPDATE business_requests SET requestType = 'product' WHERE requestType = 'productRequest'");
+        \DB::statement("UPDATE business_requests SET requestType = 'pricing' WHERE requestType = 'pricingRequest'");
+        \DB::statement("UPDATE business_requests SET requestType = 'contact' WHERE requestType = 'contactRequest'");
 
         Schema::table('business_requests', function (Blueprint $table) {
             $table->enum('requestType', ['product', 'pricing', 'contact'])->change();
@@ -31,7 +31,7 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('business_requests', function (Blueprint $table) {
-            $table->enum('requestType', ['product', 'pricing', 'contact', 'productRequest', 'pricingRequest', 'contactRequest', 'طلب منتج', 'تسعيره', 'تواصل'])->change();
+            $table->enum('requestType', ['product', 'pricing', 'contact', 'productRequest', 'pricingRequest', 'contactRequest'])->change();
         });
 
         // Revert data

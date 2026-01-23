@@ -65,7 +65,7 @@ class BusinessRequestController extends Controller
                     'company' => $supplierProfile->business_name,
                     'email' => $supplier->email,
                     'phone' => $supplier->phone ?? '',
-                    'subject' => "Business Request: {$request->industry}",
+                    'subject' => "Business Request: {$request->industry} : {$request->requestType} Request",
                     'message' => $request->description,
                     'type' => 'inquiry',
                 ]);

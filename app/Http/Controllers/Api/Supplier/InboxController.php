@@ -294,7 +294,7 @@ class InboxController extends Controller
                     'sender_id' => $supplier->id,
                     'receiver_id' => $receiverId,
                     'supplier_id' => $supplier->id,
-                    'full_name' => $supplier->name,
+                    'full_name' => $supplier->profile->business_name ?? $supplier->name,
                     'email_address' => $supplier->email,
                     'phone_number' => $supplier->phone,
                     'subject' => $originalInquiry->subject,
@@ -335,7 +335,7 @@ class InboxController extends Controller
                     'receiver_supplier_id' => $originalInquiry->sender_supplier_id === $supplier->id 
                         ? $originalInquiry->receiver_supplier_id 
                         : $originalInquiry->sender_supplier_id,
-                    'sender_name' => $supplier->name,
+                    'sender_name' => $supplier->profile->business_name ?? $supplier->name,
                     'email' => $supplier->email,
                     'phone' => $supplier->phone,
                     'company' => $supplier->profile->company_name ?? null,

@@ -22,7 +22,7 @@ class StoreBusinessRequestRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'requestType' => 'required|in:productRequest,pricingRequest,contactRequest',
+            'requestType' => 'required|in:product,pricing,contact',
             'industry' => 'required|string|max:255',
             'preferred_distance' => 'required|string|max:255',
             'description' => 'required|string|max:2000',
