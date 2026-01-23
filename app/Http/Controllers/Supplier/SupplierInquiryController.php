@@ -192,6 +192,7 @@ class SupplierInquiryController extends Controller
         \Log::info('Inquiry store - User type: ' . ($user ? get_class($user) : 'null'));
         \Log::info('Inquiry store - User ID: ' . ($user?->id ?? 'null'));
         \Log::info('Inquiry store - Auth user: ' . ($request->user()?->id ?? 'null'));
+        \Log::info('Inquiry store - Is Admin: ' . ($user instanceof \App\Models\Admin ? 'true' : 'false'));
         
         $validated = $request->validate([
             'name' => 'required|string|max:255',
@@ -211,7 +212,7 @@ class SupplierInquiryController extends Controller
             $supplierId = $user->id;
         } elseif ($user instanceof \App\Models\Admin) {
             // Authenticated admin
-            $senderId = $user->id;
+            $senderId = null;  // Admin is not in suppliers table, so sender_id must be null
             $from = 'admin';
             $supplierId = $validated['receiver_id'] ?? null; // Use receiver_id as supplier_id for admin
         } else {
@@ -234,6 +235,7 @@ class SupplierInquiryController extends Controller
             'from' => $from,
             'supplier_id' => $supplierId,
             'is_guest' => !$user instanceof Supplier && !$user instanceof \App\Models\Admin,
+            'admin_id' => $user instanceof \App\Models\Admin ? $user->id : null,
         ]);
 
         return response()->json([

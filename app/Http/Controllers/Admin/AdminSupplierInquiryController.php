@@ -59,7 +59,9 @@ class AdminSupplierInquiryController extends Controller
         $query = SupplierInquiry::query();
 
         // Exclude inquiries sent by admins
-        $query->where('from', '!=', 'admin');
+        $query->where('from', '!=', 'admin')
+              ->whereNull('admin_id')
+              ->where('full_name', '!=', 'Admin');
 
         // Filter by is_read parameter if provided
         if ($request->has('isread')) {
