@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class BusinessRequest extends Model
 {
     protected $fillable = [
-        'appearance',
+        'requestType',
         'industry',
         'preferred_distance',
         'description',
@@ -16,7 +16,7 @@ class BusinessRequest extends Model
     ];
 
     protected $casts = [
-        'appearance' => 'string',
+        'requestType' => 'string',
     ];
 
     public function supplier(): BelongsTo

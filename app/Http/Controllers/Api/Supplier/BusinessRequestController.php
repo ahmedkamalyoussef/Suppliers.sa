@@ -28,7 +28,7 @@ class BusinessRequestController extends Controller
         try {
             // Create the business request
             $businessRequest = BusinessRequest::create([
-                'appearance' => $request->appearance,
+                'requestType' => $request->requestType,
                 'industry' => $request->industry,
                 'preferred_distance' => $request->preferred_distance,
                 'description' => $request->description,
@@ -56,9 +56,7 @@ class BusinessRequestController extends Controller
             // Send inquiries to matching suppliers
             $inquiriesCreated = 0;
             foreach ($matchingSuppliers as $targetSupplier) {
-                $senderName = $request->appearance === 'anonymous' 
-                    ? 'Anonymous' 
-                    : $supplierProfile->business_name ?? 'Business Request';
+                $senderName = $supplierProfile->business_name ?? 'Business Request';
 
                 SupplierToSupplierInquiry::create([
                     'sender_supplier_id' => $supplier->id,
