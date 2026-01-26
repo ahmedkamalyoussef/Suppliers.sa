@@ -43,6 +43,8 @@ use App\Http\Controllers\Admin\AdminEmailController;
 use App\Http\Controllers\Admin\AdminSupplierCommunicationController;
 use App\Http\Controllers\Public\TopSuppliersController;
 use App\Http\Controllers\PublicController;
+use App\Http\Controllers\Api\TapPaymentController;
+use App\Http\Controllers\Api\Admin\SubscriptionController;
 
 // Simple test route for debugging
 Route::get('/', function () {
@@ -121,6 +123,28 @@ Route::get('/partnerships', [PartnershipController::class, 'index']);
 
 // Public businesses statistics endpoints
 Route::get('/public/businesses-statistics', [PublicBusinessesStatisticsController::class, 'index']);
+
+/*
+||--------------------------------------------------------------------------
+|| Tap Payment Routes (Public)
+||--------------------------------------------------------------------------
+*/
+Route::prefix('tap')->group(function () {
+    Route::get('/publishable-key', [TapPaymentController::class, 'getPublishableKey']);
+    Route::post('/charges', [TapPaymentController::class, 'createCharge']);
+    Route::get('/charges/{chargeId}', [TapPaymentController::class, 'retrieveCharge']);
+    Route::post('/customers', [TapPaymentController::class, 'createCustomer']);
+    Route::post('/webhook', [TapPaymentController::class, 'handleWebhook']);
+    
+    // Subscription endpoints
+    Route::get('/subscription/plans', [TapPaymentController::class, 'getSubscriptionPlans']);
+    Route::post('/subscription/payment', [TapPaymentController::class, 'createSubscriptionPayment'])->middleware('auth:sanctum:supplier');
+    Route::post('/subscription/payment-test', [TapPaymentController::class, 'createSubscriptionPayment'])->middleware('auth:supplier'); // Temporary test endpoint
+    Route::get('/subscription/success', [TapPaymentController::class, 'subscriptionSuccess']);
+    Route::get('/subscription/current', [TapPaymentController::class, 'getUserSubscription'])->middleware('auth:sanctum:supplier');
+    Route::get('/subscription/history', [TapPaymentController::class, 'getUserSubscriptionHistory'])->middleware('auth:sanctum:supplier');
+    Route::get('/subscription/transactions', [TapPaymentController::class, 'getUserTransactions'])->middleware('auth:sanctum:supplier');
+});
 
 Route::middleware('auth:sanctum')->group(function () {
     // Protected supplier profile endpoint (only owner can view)
@@ -214,6 +238,19 @@ Route::middleware('auth:sanctum')->group(function () {
         // Supplier Communications (Admin Only)
         Route::get('/communications', [AdminSupplierCommunicationController::class, 'getCommunications']);
         Route::get('/communications/summary', [AdminSupplierCommunicationController::class, 'getCommunicationSummary']);
+        
+        // Subscription Management (Admin Only)
+        Route::prefix('subscriptions')->group(function () {
+            Route::get('/', [SubscriptionController::class, 'index']);
+            Route::get('/statistics', [SubscriptionController::class, 'statistics']);
+            Route::get('/transactions', [SubscriptionController::class, 'transactions']);
+            Route::get('/payment-statistics', [SubscriptionController::class, 'paymentStatistics']);
+            Route::get('/plans', [SubscriptionController::class, 'plans']);
+            Route::post('/plans', [SubscriptionController::class, 'createPlan']);
+            Route::put('/plans/{id}', [SubscriptionController::class, 'updatePlan']);
+            Route::post('/cancel/{id}', [SubscriptionController::class, 'cancelSubscription']);
+            Route::get('/monthly-revenue', [SubscriptionController::class, 'monthlyRevenue']);
+        });
     });
 
     // Admin Management (Super Admin Only)
@@ -442,6 +479,15 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/{transaction_id}/refund', [PaymentController::class, 'refund']);
         Route::post('/callback', [PaymentController::class, 'callback']);
         Route::get('/methods', [PaymentController::class, 'methods']);
+    });
+
+    /*
+    ||--------------------------------------------------------------------------
+    || Tap Payment Routes (Authenticated)
+    ||--------------------------------------------------------------------------
+    */
+    Route::prefix('tap')->group(function () {
+        Route::post('/charges/{chargeId}/refund', [TapPaymentController::class, 'createRefund']);
     });
 
     /*
