@@ -117,6 +117,8 @@ class SupplierAuthController extends Controller
             'main_phone' => $request->phone,
             'contact_email' => $request->email,
             'slug' => null,
+            'latitude' => $this->generateRiyadhRandomLatitude(),
+            'longitude' => $this->generateRiyadhRandomLongitude(),
         ]);
 
         $profile->slug = $this->generateUniqueSupplierSlug($profile->business_name, $profile->id);
@@ -596,5 +598,23 @@ class SupplierAuthController extends Controller
             'longitude' => $supplier->profile->longitude,
             'address' => $supplier->profile->business_address
         ]);
+    }
+
+    /**
+     * Generate random latitude within Riyadh bounds
+     * Riyadh latitude range: approximately 24.7136° to 24.8136°
+     */
+    protected function generateRiyadhRandomLatitude(): float
+    {
+        return mt_rand(24713600, 24813600) / 1000000;
+    }
+
+    /**
+     * Generate random longitude within Riyadh bounds
+     * Riyadh longitude range: approximately 46.6753° to 46.7753°
+     */
+    protected function generateRiyadhRandomLongitude(): float
+    {
+        return mt_rand(46675300, 46775300) / 1000000;
     }
 }

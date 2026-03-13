@@ -211,6 +211,8 @@ class AdminSupplierController extends Controller
         // Create profile with business name
         $supplier->profile()->create([
             'business_name' => $validated['businessName'],
+            'latitude' => $this->generateRiyadhRandomLatitude(),
+            'longitude' => $this->generateRiyadhRandomLongitude(),
         ]);
 
         return response()->json([
@@ -334,5 +336,23 @@ class AdminSupplierController extends Controller
         }
 
         return $base;
+    }
+
+    /**
+     * Generate random latitude within Riyadh bounds
+     * Riyadh latitude range: approximately 24.7136° to 24.8136°
+     */
+    protected function generateRiyadhRandomLatitude(): float
+    {
+        return mt_rand(24713600, 24813600) / 1000000;
+    }
+
+    /**
+     * Generate random longitude within Riyadh bounds
+     * Riyadh longitude range: approximately 46.6753° to 46.7753°
+     */
+    protected function generateRiyadhRandomLongitude(): float
+    {
+        return mt_rand(46675300, 46775300) / 1000000;
     }
 }

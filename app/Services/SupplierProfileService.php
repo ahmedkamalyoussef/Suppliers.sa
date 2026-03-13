@@ -93,6 +93,10 @@ class SupplierProfileService
             $location = $request->input('location', []);
             $profileData['latitude'] = data_get($location, 'lat');
             $profileData['longitude'] = data_get($location, 'lng');
+        } else {
+            // Generate random coordinates within Riyadh bounds if no location provided
+            $profileData['latitude'] = $this->generateRiyadhRandomLatitude();
+            $profileData['longitude'] = $this->generateRiyadhRandomLongitude();
         }
 
         return $profileData;
@@ -171,5 +175,23 @@ class SupplierProfileService
             'thu' => ['closed' => false, 'open' => '09:00', 'close' => '14:00'],
             'fri' => ['closed' => true],
         ];
+    }
+
+    /**
+     * Generate random latitude within Riyadh bounds
+     * Riyadh latitude range: approximately 24.7136° to 24.8136°
+     */
+    protected function generateRiyadhRandomLatitude(): float
+    {
+        return mt_rand(24713600, 24813600) / 1000000;
+    }
+
+    /**
+     * Generate random longitude within Riyadh bounds
+     * Riyadh longitude range: approximately 46.6753° to 46.7753°
+     */
+    protected function generateRiyadhRandomLongitude(): float
+    {
+        return mt_rand(46675300, 46775300) / 1000000;
     }
 }
