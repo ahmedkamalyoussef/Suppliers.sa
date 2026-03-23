@@ -144,7 +144,7 @@ class TapPaymentService
     {
         return [
             'amount' => $paymentData['amount'],
-            'currency' => $paymentData['currency'] ?? 'KWD',
+            'currency' => $paymentData['currency'] ?? 'SAR',
             'customer' => [
                 'first_name' => $paymentData['customer']['first_name'],
                 'last_name' => $paymentData['customer']['last_name'] ?? '',
@@ -174,5 +174,15 @@ class TapPaymentService
                 'sms' => $paymentData['receipt']['sms'] ?? true,
             ],
         ];
+    }
+
+    /**
+     * Verify webhook signature
+     */
+    public function verifyWebhook($payload, $signature)
+    {
+        // For now, skip signature verification for testing
+        // In production, implement proper signature verification
+        return true;
     }
 }

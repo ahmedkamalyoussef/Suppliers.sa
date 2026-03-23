@@ -45,6 +45,7 @@ use App\Http\Controllers\Public\TopSuppliersController;
 use App\Http\Controllers\PublicController;
 use App\Http\Controllers\Api\TapPaymentController;
 use App\Http\Controllers\Api\Admin\SubscriptionController;
+use App\Http\Controllers\PaymentController as TapPaymentGatewayController;
 
 // Simple test route for debugging
 Route::get('/', function () {
@@ -126,6 +127,30 @@ Route::get('/public/businesses-statistics', [PublicBusinessesStatisticsControlle
 
 /*
 ||--------------------------------------------------------------------------
+|| Tap Payment Gateway Routes (Public)
+||--------------------------------------------------------------------------
+*/
+Route::prefix('payment')->group(function () {
+    Route::get('/config', [TapPaymentGatewayController::class, 'getConfig']);
+    Route::post('/create', [TapPaymentGatewayController::class, 'createPayment']);
+    Route::get('/details/{chargeId}', [TapPaymentGatewayController::class, 'getPaymentDetails']);
+    Route::match(['GET', 'POST'], '/webhook', [TapPaymentGatewayController::class, 'webhook']);
+    Route::get('/success', [TapPaymentGatewayController::class, 'paymentSuccess']);
+});
+
+/*
+||--------------------------------------------------------------------------
+|| Payment endpoints
+||--------------------------------------------------------------------------
+*/
+Route::get('/subscription/plans', [TapPaymentGatewayController::class, 'getSubscriptionPlans']);
+Route::post('/payment/create', [TapPaymentGatewayController::class, 'createPayment'])->middleware('auth:sanctum');
+Route::match(['GET', 'POST'], '/payment/webhook', [TapPaymentGatewayController::class, 'webhook']);
+Route::get('/payment/success', [TapPaymentGatewayController::class, 'paymentSuccess']);
+Route::get('/payment/recent', [TapPaymentGatewayController::class, 'getRecentPayments'])->middleware('auth:sanctum');
+
+/*
+||--------------------------------------------------------------------------
 || Tap Payment Routes (Public)
 ||--------------------------------------------------------------------------
 */
@@ -136,11 +161,7 @@ Route::prefix('tap')->group(function () {
     Route::post('/customers', [TapPaymentController::class, 'createCustomer']);
     Route::post('/webhook', [TapPaymentController::class, 'handleWebhook']);
     
-    // Subscription endpoints
-    Route::get('/subscription/plans', [TapPaymentController::class, 'getSubscriptionPlans']);
-    Route::post('/subscription/payment', [TapPaymentController::class, 'createSubscriptionPayment'])->middleware('auth:sanctum:supplier');
-    Route::post('/subscription/payment-test', [TapPaymentController::class, 'createSubscriptionPayment'])->middleware('auth:supplier'); // Temporary test endpoint
-    Route::get('/subscription/success', [TapPaymentController::class, 'subscriptionSuccess']);
+    // Legacy subscription endpoints
     Route::get('/subscription/current', [TapPaymentController::class, 'getUserSubscription'])->middleware('auth:sanctum:supplier');
     Route::get('/subscription/history', [TapPaymentController::class, 'getUserSubscriptionHistory'])->middleware('auth:sanctum:supplier');
     Route::get('/subscription/transactions', [TapPaymentController::class, 'getUserTransactions'])->middleware('auth:sanctum:supplier');

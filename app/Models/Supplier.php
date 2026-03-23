@@ -19,6 +19,8 @@ class Supplier extends Authenticatable
         'phone',
         'profile_image',
         'plan',
+        'has_used_free_trial',
+        'trial_ends_at',
         'status',
         'last_seen_at',
         'role',
@@ -45,6 +47,8 @@ class Supplier extends Authenticatable
     protected $casts = [
         'email_verified_at' => 'datetime',
         'last_seen_at' => 'datetime',
+        'trial_ends_at' => 'datetime',
+        'has_used_free_trial' => 'boolean',
         // Notification Preferences
         'email_notifications' => 'boolean',
         'sms_notifications' => 'boolean',

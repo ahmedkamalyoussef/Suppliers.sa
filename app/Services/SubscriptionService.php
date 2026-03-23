@@ -183,9 +183,29 @@ class SubscriptionService
     }
 
     /**
-     * Activate subscription after successful payment
+     * Check if user is eligible for free trial
      */
-    public function activateSubscription($tapChargeId)
+    public function isEligibleForTrial($supplierId)
+    {
+        $supplier = Supplier::find($supplierId);
+        
+        if (!$supplier) {
+            return false;
+        }
+        
+        // Check if user has ever had a subscription before
+        $hasPreviousSubscriptions = UserSubscription::where('user_id', $supplierId)
+            ->where('status', '!=', 'pending')
+            ->exists();
+        
+        // Eligible if no previous subscriptions and hasn't used trial
+        return !$hasPreviousSubscriptions && !$supplier->has_used_free_trial;
+    }
+
+    /**
+     * Activate subscription after successful payment (or trial)
+     */
+    public function activateSubscription($tapChargeId, $isTrial = false)
     {
         try {
             DB::beginTransaction();
@@ -198,13 +218,23 @@ class SubscriptionService
             // Get supplier and plan
             $supplier = Supplier::find($transaction->user_id);
             $plan = $transaction->subscriptionPlan;
+            
+            // Check for trial eligibility
+            $isTrialEligible = $this->isEligibleForTrial($supplier->id);
+            $trialDays = $isTrialEligible ? 30 : 0;
 
             // Deactivate any existing active subscriptions
             $this->deactivateUserSubscriptions($supplier->id);
 
             // Calculate subscription dates
             $startsAt = now();
-            $endsAt = $startsAt->copy()->addMonths($plan->duration_months);
+            if ($trialDays > 0) {
+                // First time: 30 days trial + plan duration
+                $endsAt = $startsAt->copy()->addDays($trialDays)->addMonths($plan->duration_months);
+            } else {
+                // Returning customer: normal duration
+                $endsAt = $startsAt->copy()->addMonths($plan->duration_months);
+            }
 
             // Create new subscription
             $subscription = UserSubscription::create([
@@ -216,13 +246,24 @@ class SubscriptionService
                 'tap_charge_id' => $tapChargeId,
                 'paid_amount' => $plan->price,
                 'currency' => $plan->currency,
-                'auto_renew' => false, // Can be configured later
+                'auto_renew' => false,
+                'is_trial' => $trialDays > 0,
+                'trial_ends_at' => $trialDays > 0 ? $startsAt->copy()->addDays($trialDays) : null,
             ]);
+            
+            // Update supplier trial status
+            if ($trialDays > 0) {
+                $supplier->update([
+                    'has_used_free_trial' => true,
+                    'trial_ends_at' => $startsAt->copy()->addDays($trialDays),
+                ]);
+            }
 
             // Update transaction
             $transaction->update([
                 'status' => 'completed',
                 'paid_at' => now(),
+                'is_trial' => $trialDays > 0,
             ]);
 
             DB::commit();
@@ -232,12 +273,16 @@ class SubscriptionService
                 'plan_id' => $plan->id,
                 'subscription_id' => $subscription->id,
                 'charge_id' => $tapChargeId,
+                'is_trial' => $trialDays > 0,
+                'trial_days' => $trialDays,
             ]);
 
             return [
                 'success' => true,
                 'subscription' => $subscription,
                 'transaction' => $transaction,
+                'is_trial' => $trialDays > 0,
+                'trial_ends_at' => $trialDays > 0 ? $startsAt->copy()->addDays($trialDays) : null,
             ];
 
         } catch (\Exception $e) {
@@ -279,7 +324,17 @@ class SubscriptionService
                 'cancelled_at' => now(),
             ]);
 
-            Log::info('Subscription expired', [
+            // Revert supplier plan back to Basic
+            DB::table('suppliers')
+                ->where('id', $subscription->user_id)
+                ->update([
+                    'plan' => 'free',
+                    'subscription_status' => 'free',
+                    'subscription_plan_id' => null,
+                    'updated_at' => now(),
+                ]);
+
+            Log::info('Subscription expired and reverted to Basic', [
                 'user_id' => $subscription->user_id,
                 'subscription_id' => $subscription->id,
             ]);

@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "9306d523feaf982e40e246bf1897f632",
+    "content-hash": "1db51da46e007c4e637b5ee6931c962b",
     "packages": [
         {
             "name": "brick/math",
@@ -1601,6 +1601,64 @@
                 }
             ],
             "time": "2025-08-22T14:27:06+00:00"
+        },
+        {
+            "name": "karim007/laravel-tap",
+            "version": "v1.2",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/karim-007/laravel-tap.git",
+                "reference": "164abd71229348418e0b4111174c70f01a9662a3"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/karim-007/laravel-tap/zipball/164abd71229348418e0b4111174c70f01a9662a3",
+                "reference": "164abd71229348418e0b4111174c70f01a9662a3",
+                "shasum": ""
+            },
+            "require": {
+                "ext-curl": "*",
+                "php": "^7.4|^8.0|^8.1|^8.2"
+            },
+            "type": "library",
+            "extra": {
+                "laravel": {
+                    "aliases": {
+                        "LaravelBkashTokenize": "Karim007\\LaravelTap\\LaravelTap"
+                    },
+                    "providers": [
+                        "Karim007\\LaravelTap\\LaravelTapServiceProvider"
+                    ]
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "Karim007\\LaravelTap\\": "src/"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Md abdul karim",
+                    "email": "karim.cse007@gmail.com"
+                }
+            ],
+            "description": "Tap payment gateway for laravel",
+            "keywords": [
+                "laravel-tap",
+                "laravel-tap-payment",
+                "tap",
+                "tap-payment",
+                "tap-payment-gateway"
+            ],
+            "support": {
+                "issues": "https://github.com/karim-007/laravel-tap/issues",
+                "source": "https://github.com/karim-007/laravel-tap/tree/v1.2"
+            },
+            "time": "2024-06-02T06:14:40+00:00"
         },
         {
             "name": "laravel/framework",

@@ -20,6 +20,8 @@ class UserSubscription extends Model
         'paid_amount',
         'currency',
         'auto_renew',
+        'is_trial',
+        'trial_ends_at',
     ];
 
     protected $casts = [
@@ -28,6 +30,8 @@ class UserSubscription extends Model
         'cancelled_at' => 'datetime',
         'paid_amount' => 'decimal:2',
         'auto_renew' => 'boolean',
+        'is_trial' => 'boolean',
+        'trial_ends_at' => 'datetime',
     ];
 
     /**
