@@ -446,7 +446,7 @@ class SubscriptionService
     {
         try {
             $subscription = UserSubscription::findOrFail($subscriptionId);
-            
+
             $subscription->update([
                 'status' => 'cancelled',
                 'cancelled_at' => now(),
@@ -465,11 +465,75 @@ class SubscriptionService
 
         } catch (\Exception $e) {
             Log::error('Subscription cancellation failed: ' . $e->getMessage());
-            
+
             return [
                 'success' => false,
                 'message' => $e->getMessage(),
             ];
         }
+    }
+
+    /**
+     * Send renewal reminders for subscriptions expiring in 2 days
+     */
+    public function sendRenewalReminders()
+    {
+        $reminderDate = now()->addDays(2)->startOfDay();
+        $reminderDateEnd = now()->addDays(2)->endOfDay();
+
+        $expiringSubscriptions = UserSubscription::where('status', 'active')
+            ->whereBetween('ends_at', [$reminderDate, $reminderDateEnd])
+            ->with('user', 'subscriptionPlan')
+            ->get();
+
+        $sentCount = 0;
+
+        foreach ($expiringSubscriptions as $subscription) {
+            $supplier = Supplier::find($subscription->user_id);
+
+            if (!$supplier) {
+                continue;
+            }
+
+            // Check if reminder already sent (using notifications table)
+            $alreadyNotified = $supplier->notifications()
+                ->where('type', 'App\\Notifications\\CustomNotification')
+                ->where('created_at', '>=', now()->subDays(1))
+                ->whereJsonContains('data->type', 'subscription_reminder')
+                ->exists();
+
+            if ($alreadyNotified) {
+                continue;
+            }
+
+            $planName = $subscription->subscriptionPlan?->display_name ?? 'Premium';
+            $daysRemaining = 2;
+
+            $notificationData = [
+                'type' => 'subscription_reminder',
+                'title' => 'اشتراكك على وشك الانتهاء',
+                'message' => "عزيزي {$supplier->name}،\n\nاشتراكك في باقة {$planName} سينتهي خلال {$daysRemaining} أيام ({$subscription->ends_at->format('Y-m-d')}).\n\nلضمان استمرار خدماتك بدون انقطاع، يرجى تجديد اشتراكك قبل انتهاء الفترة.",
+                'icon' => 'calendar-warning',
+                'action_url' => route('subscription.plans'),
+                'data' => [
+                    'subscription_id' => $subscription->id,
+                    'ends_at' => $subscription->ends_at->toDateTimeString(),
+                    'days_remaining' => $daysRemaining,
+                    'plan_name' => $planName,
+                ],
+            ];
+
+            $supplier->notify(new \App\Notifications\CustomNotification($notificationData));
+
+            Log::info('Renewal reminder sent', [
+                'user_id' => $subscription->user_id,
+                'subscription_id' => $subscription->id,
+                'ends_at' => $subscription->ends_at,
+            ]);
+
+            $sentCount++;
+        }
+
+        return $sentCount;
     }
 }

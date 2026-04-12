@@ -10,3 +10,6 @@ Artisan::command('inspire', function () {
 
 // Schedule subscription expiration check to run daily at midnight
 Schedule::command('subscriptions:expire')->daily();
+
+// Schedule renewal reminders to run daily at 9 AM
+Schedule::command('subscriptions:send-reminders')->dailyAt('09:00');
