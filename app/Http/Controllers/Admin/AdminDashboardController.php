@@ -13,6 +13,8 @@ use App\Models\SupplierProduct;
 use App\Models\SupplierCertification;
 use App\Models\SupplierDocument;
 use App\Models\SystemSettings;
+use App\Models\PaymentTransaction;
+use App\Models\SubscriptionPlan;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -1072,12 +1074,23 @@ class AdminDashboardController extends Controller
                 'system_alerts' => true,
                 'maintenance_notifications' => true,
                 'backup_retention_days' => 30,
+                'premium_monthly_price' => 290,
+                'premium_annual_price' => 2900,
             ]);
         }
 
+        // Calculate total revenue from completed payment transactions
+        $totalRevenue = PaymentTransaction::where('status', 'completed')
+            ->where('type', 'subscription')
+            ->sum('amount') ?? 0;
+
+        // Add total_revenue to settings array for response
+        $settingsArray = $settings->toArray();
+        $settingsArray['total_revenue'] = (float) $totalRevenue;
+
         return response()->json([
             'success' => true,
-            'settings' => $settings
+            'settings' => $settingsArray
         ]);
     }
 
@@ -1129,6 +1142,10 @@ class AdminDashboardController extends Controller
             
             // System Settings
             'backup_retention_days' => 'required|integer|min:7|max:365',
+            
+            // Payment Settings
+            'premium_monthly_price' => 'required|numeric|min:0',
+            'premium_annual_price' => 'required|numeric|min:0',
         ]);
 
         if ($validator->fails()) {
@@ -1148,6 +1165,17 @@ class AdminDashboardController extends Controller
 
             $settings->fill($request->all());
             $settings->save();
+
+            // Sync prices with subscription_plans table
+            if ($request->has('premium_monthly_price')) {
+                SubscriptionPlan::where('name', 'premium_monthly')
+                    ->update(['price' => $request->input('premium_monthly_price')]);
+            }
+
+            if ($request->has('premium_annual_price')) {
+                SubscriptionPlan::where('name', 'premium_yearly')
+                    ->update(['price' => $request->input('premium_annual_price')]);
+            }
 
             return response()->json([
                 'success' => true,

@@ -37,6 +37,10 @@ class SystemSettings extends Model
         
         // System Settings
         'backup_retention_days',
+        
+        // Payment Settings
+        'premium_monthly_price',
+        'premium_annual_price',
     ];
 
     protected $casts = [
@@ -47,6 +51,8 @@ class SystemSettings extends Model
         'require_two_factor_authentication' => 'boolean',
         'strong_password_required' => 'boolean',
         'data_encryption_enabled' => 'boolean',
+        'premium_monthly_price' => 'decimal:2',
+        'premium_annual_price' => 'decimal:2',
         'email_notifications' => 'boolean',
         'sms_notifications' => 'boolean',
         'push_notifications' => 'boolean',
