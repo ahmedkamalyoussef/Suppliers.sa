@@ -160,7 +160,7 @@ class SubscriptionService
             // Update transaction with Tap charge ID
             $transaction->update([
                 'tap_charge_id' => $charge['id'],
-                'tap_response' => $charge,
+                'tap_response' => $charge, 
             ]);
 
             DB::commit();
@@ -478,12 +478,11 @@ class SubscriptionService
      */
     public function sendRenewalReminders()
     {
-        $reminderDate = now()->addDays(2)->startOfDay();
-        $reminderDateEnd = now()->addDays(2)->endOfDay();
-
+        // Find all active subscriptions expiring in the next 2 days
         $expiringSubscriptions = UserSubscription::where('status', 'active')
-            ->whereBetween('ends_at', [$reminderDate, $reminderDateEnd])
-            ->with('user', 'subscriptionPlan')
+            ->where('ends_at', '<=', now()->addDays(2))
+            ->where('ends_at', '>=', now())
+            ->with('supplier', 'subscriptionPlan')
             ->get();
 
         $sentCount = 0;
@@ -495,43 +494,35 @@ class SubscriptionService
                 continue;
             }
 
-            // Check if reminder already sent (using notifications table)
-            $alreadyNotified = $supplier->notifications()
-                ->where('type', 'App\\Notifications\\CustomNotification')
-                ->where('created_at', '>=', now()->subDays(1))
-                ->whereJsonContains('data->type', 'subscription_reminder')
-                ->exists();
-
-            if ($alreadyNotified) {
-                continue;
-            }
-
             $planName = $subscription->subscriptionPlan?->display_name ?? 'Premium';
-            $daysRemaining = 2;
+            $daysRemaining = ceil(now()->diffInDays($subscription->ends_at));
 
-            $notificationData = [
-                'type' => 'subscription_reminder',
-                'title' => 'اشتراكك على وشك الانتهاء',
-                'message' => "عزيزي {$supplier->name}،\n\nاشتراكك في باقة {$planName} سينتهي خلال {$daysRemaining} أيام ({$subscription->ends_at->format('Y-m-d')}).\n\nلضمان استمرار خدماتك بدون انقطاع، يرجى تجديد اشتراكك قبل انتهاء الفترة.",
-                'icon' => 'calendar-warning',
-                'action_url' => route('subscription.plans'),
-                'data' => [
+            // Send email directly
+            try {
+                \Illuminate\Support\Facades\Mail::raw(
+                    "عزيزي {$supplier->name}،\n\n" .
+                    "اشتراكك في باقة {$planName} سينتهي خلال {$daysRemaining} أيام ({$subscription->ends_at->format('Y-m-d')}).\n\n" .
+                    "لضمان استمرار خدماتك بدون انقطاع، يرجى تجديد اشتراكك قبل انتهاء الفترة.",
+                    function ($message) use ($supplier) {
+                        $message->to($supplier->email)
+                                ->subject('تذكير: اشتراكك على وشك الانتهاء');
+                    }
+                );
+
+                Log::info('Renewal reminder email sent', [
+                    'supplier_id' => $subscription->supplier_id,
+                    'email' => $supplier->email,
                     'subscription_id' => $subscription->id,
-                    'ends_at' => $subscription->ends_at->toDateTimeString(),
-                    'days_remaining' => $daysRemaining,
-                    'plan_name' => $planName,
-                ],
-            ];
+                    'ends_at' => $subscription->ends_at,
+                ]);
 
-            $supplier->notify(new \App\Notifications\CustomNotification($notificationData));
-
-            Log::info('Renewal reminder sent', [
-                'supplier_id' => $subscription->supplier_id,
-                'subscription_id' => $subscription->id,
-                'ends_at' => $subscription->ends_at,
-            ]);
-
-            $sentCount++;
+                $sentCount++;
+            } catch (Exception $e) {
+                Log::error('Failed to send renewal reminder email', [
+                    'supplier_id' => $subscription->supplier_id,
+                    'error' => $e->getMessage(),
+                ]);
+            }
         }
 
         return $sentCount;
