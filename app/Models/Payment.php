@@ -10,7 +10,7 @@ class Payment extends Model
     use HasFactory;
 
     protected $fillable = [
-        'user_id',
+        'supplier_id',
         'tap_id',
         'amount',
         'currency',
@@ -28,9 +28,9 @@ class Payment extends Model
         'paid_at' => 'datetime',
     ];
 
-    public function user()
+    public function supplier()
     {
-        return $this->belongsTo(User::class);
+        return $this->belongsTo(Supplier::class);
     }
 
     public function markAsPaid()

@@ -3,6 +3,7 @@
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\DB;
 
 return new class extends Migration
 {
@@ -11,6 +12,23 @@ return new class extends Migration
      */
     public function up(): void
     {
+        // Check if payments table exists
+        if (Schema::hasTable('payments')) {
+            // Drop foreign key constraint first
+            try {
+                Schema::table('payments', function (Blueprint $table) {
+                    $table->dropForeign(['user_id']);
+                    $table->dropIndex(['user_id', 'status']);
+                });
+            } catch (\Exception $e) {
+                // Foreign key might not exist, continue
+            }
+            
+            // Drop the table
+            Schema::dropIfExists('payments');
+        }
+        
+        // Create payments table with supplier_id instead of user_id
         Schema::create('payments', function (Blueprint $table) {
             $table->id();
             $table->foreignId('supplier_id')->constrained('suppliers')->onDelete('cascade');

@@ -19,6 +19,8 @@ class Supplier extends Authenticatable
         'phone',
         'profile_image',
         'plan',
+        'subscription_status',
+        'subscription_plan_id',
         'has_used_free_trial',
         'trial_ends_at',
         'status',

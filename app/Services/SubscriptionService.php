@@ -22,7 +22,7 @@ class SubscriptionService
 
             // Create payment transaction record
             $transaction = PaymentTransaction::create([
-                'user_id' => $supplier->id,
+                'supplier_id' => $supplier->id,
                 'subscription_plan_id' => $plan->id,
                 'type' => 'subscription',
                 'status' => 'pending',
@@ -32,7 +32,7 @@ class SubscriptionService
                 'metadata' => [
                     'plan_name' => $plan->name,
                     'billing_cycle' => $plan->billing_cycle,
-                    'user_email' => $supplier->email,
+                    'supplier_email' => $supplier->email,
                 ],
             ]);
 
@@ -194,7 +194,7 @@ class SubscriptionService
         }
         
         // Check if user has ever had a subscription before
-        $hasPreviousSubscriptions = UserSubscription::where('user_id', $supplierId)
+        $hasPreviousSubscriptions = UserSubscription::where('supplier_id', $supplierId)
             ->where('status', '!=', 'pending')
             ->exists();
         
@@ -216,7 +216,7 @@ class SubscriptionService
                 ->firstOrFail();
 
             // Get supplier and plan
-            $supplier = Supplier::find($transaction->user_id);
+            $supplier = Supplier::find($transaction->supplier_id);
             $plan = $transaction->subscriptionPlan;
             
             // Check for trial eligibility
@@ -238,7 +238,7 @@ class SubscriptionService
 
             // Create new subscription
             $subscription = UserSubscription::create([
-                'user_id' => $supplier->id,
+                'supplier_id' => $supplier->id,
                 'subscription_plan_id' => $plan->id,
                 'status' => 'active',
                 'starts_at' => $startsAt,
@@ -269,7 +269,7 @@ class SubscriptionService
             DB::commit();
 
             Log::info('Subscription activated', [
-                'user_id' => $supplier->id,
+                'supplier_id' => $supplier->id,
                 'plan_id' => $plan->id,
                 'subscription_id' => $subscription->id,
                 'charge_id' => $tapChargeId,
@@ -301,7 +301,7 @@ class SubscriptionService
      */
     private function deactivateUserSubscriptions($supplierId)
     {
-        UserSubscription::where('user_id', $supplierId)
+        UserSubscription::where('supplier_id', $supplierId)
             ->where('status', 'active')
             ->update([
                 'status' => 'expired',
@@ -326,7 +326,7 @@ class SubscriptionService
 
             // Revert supplier plan back to Basic
             DB::table('suppliers')
-                ->where('id', $subscription->user_id)
+                ->where('id', $subscription->supplier_id)
                 ->update([
                     'plan' => 'free',
                     'subscription_status' => 'free',
@@ -335,7 +335,7 @@ class SubscriptionService
                 ]);
 
             Log::info('Subscription expired and reverted to Basic', [
-                'user_id' => $subscription->user_id,
+                'supplier_id' => $subscription->supplier_id,
                 'subscription_id' => $subscription->id,
             ]);
         }
@@ -348,7 +348,7 @@ class SubscriptionService
      */
     public function getUserActiveSubscription($supplierId)
     {
-        return UserSubscription::where('user_id', $supplierId)
+        return UserSubscription::where('supplier_id', $supplierId)
             ->where('status', 'active')
             ->where('ends_at', '>', now())
             ->with('subscriptionPlan')
@@ -360,7 +360,7 @@ class SubscriptionService
      */
     public function getUserSubscriptionHistory($supplierId)
     {
-        return UserSubscription::where('user_id', $supplierId)
+        return UserSubscription::where('supplier_id', $supplierId)
             ->with('subscriptionPlan')
             ->orderBy('created_at', 'desc')
             ->get();
@@ -455,7 +455,7 @@ class SubscriptionService
 
             Log::info('Subscription cancelled', [
                 'subscription_id' => $subscriptionId,
-                'user_id' => $subscription->user_id,
+                'supplier_id' => $subscription->supplier_id,
             ]);
 
             return [
@@ -489,7 +489,7 @@ class SubscriptionService
         $sentCount = 0;
 
         foreach ($expiringSubscriptions as $subscription) {
-            $supplier = Supplier::find($subscription->user_id);
+            $supplier = Supplier::find($subscription->supplier_id);
 
             if (!$supplier) {
                 continue;
@@ -526,7 +526,7 @@ class SubscriptionService
             $supplier->notify(new \App\Notifications\CustomNotification($notificationData));
 
             Log::info('Renewal reminder sent', [
-                'user_id' => $subscription->user_id,
+                'supplier_id' => $subscription->supplier_id,
                 'subscription_id' => $subscription->id,
                 'ends_at' => $subscription->ends_at,
             ]);

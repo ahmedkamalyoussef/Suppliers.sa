@@ -7,7 +7,6 @@ use Illuminate\Database\Eloquent\Model;
 class Otp extends Model
 {
     protected $fillable = [
-        'user_id',
         'admin_id',
         'supplier_id',
         'otp',
@@ -21,19 +20,8 @@ class Otp extends Model
 
     public static function generateForUser($userId, $email = null)
     {
-        // Delete any existing OTPs for this user
-        self::where('user_id', $userId)->delete();
-
-        // Generate new OTP for user
-        $otp = self::create([
-            'user_id' => $userId,
-            'supplier_id' => null,
-            'email' => $email,
-            'otp' => str_pad(random_int(0, 9999), 4, '0', STR_PAD_LEFT),
-            'expires_at' => now()->addMinutes(10),
-        ]);
-
-        return $otp;
+        // This method is deprecated, use generateForSupplier instead
+        return self::generateForSupplier($userId, $email);
     }
 
     public static function generateForAdmin($adminId, $email = null)
@@ -43,7 +31,6 @@ class Otp extends Model
 
         // Generate new OTP for admin
         $otp = self::create([
-            'user_id' => null,
             'admin_id' => $adminId,
             'supplier_id' => null,
             'email' => $email,
@@ -61,7 +48,6 @@ class Otp extends Model
 
         // Generate new OTP for supplier
         $otp = self::create([
-            'user_id' => null,
             'admin_id' => null,
             'supplier_id' => $supplierId,
             'email' => $email,

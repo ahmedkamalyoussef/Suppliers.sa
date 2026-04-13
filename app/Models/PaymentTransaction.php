@@ -10,7 +10,7 @@ class PaymentTransaction extends Model
     use HasFactory;
 
     protected $fillable = [
-        'user_id',
+        'supplier_id',
         'subscription_plan_id',
         'tap_charge_id',
         'tap_refund_id',
@@ -36,11 +36,11 @@ class PaymentTransaction extends Model
     ];
 
     /**
-     * Get the user that owns the transaction
+     * Get the supplier that owns the transaction
      */
-    public function user()
+    public function supplier()
     {
-        return $this->belongsTo(User::class);
+        return $this->belongsTo(Supplier::class);
     }
 
     /**

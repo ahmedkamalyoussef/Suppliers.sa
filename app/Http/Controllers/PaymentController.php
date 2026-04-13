@@ -44,17 +44,17 @@ class PaymentController extends Controller
         }
 
         try {
-            // Get authenticated user
-            $user = $request->user();
-            if (!$user) {
-                Log::error('Payment creation: User not authenticated');
+            // Get authenticated supplier
+            $supplier = $request->user();
+            if (!$supplier) {
+                Log::error('Payment creation: Supplier not authenticated');
                 return response()->json([
                     'success' => false,
-                    'message' => 'User not authenticated'
+                    'message' => 'Supplier not authenticated'
                 ], 401);
             }
 
-            Log::info('Payment creation: Authenticated user', ['user_id' => $user->id, 'email' => $user->email]);
+            Log::info('Payment creation: Authenticated supplier', ['supplier_id' => $supplier->id, 'email' => $supplier->email]);
 
             // Extract plan_id from order_id if exists
             $planId = null;
@@ -64,7 +64,7 @@ class PaymentController extends Controller
 
             // Create payment record first
             $payment = Payment::create([
-                'user_id' => $user->id, // Use actual authenticated user ID
+                'supplier_id' => $supplier->id, // Use actual authenticated supplier ID
                 'amount' => $request->amount,
                 'currency' => 'SAR',
                 'status' => 'INITIATED',
@@ -89,11 +89,10 @@ class PaymentController extends Controller
                     'id' => 'src_all'
                 ],
                 'redirect' => [
-                    'url' => env('APP_URL') . '/payment-complete'
+                    'url' => env('FRONTEND_URL', env('APP_URL')) . '/payment-complete'
                 ],
                 'post' => [
-                    'url' => 'https://darius-orthotropous-refutably.ngrok-free.dev/api/payment/webhook'
-                    //'url' => env('APP_URL') . '/api/payment/webhook'
+                    'url' => env('APP_URL') . '/api/payment/webhook'
                 ],
                 'description' => $request->description ?? 'Payment for order',
                 'metadata' => [
@@ -294,11 +293,11 @@ class PaymentController extends Controller
                 if ($plan) {
                     // Check if this is user's first subscription (eligible for trial)
                     $hasPreviousSubscriptions = \DB::table('user_subscriptions')
-                        ->where('user_id', $payment->user_id)
+                        ->where('supplier_id', $payment->supplier_id)
                         ->where('status', '!=', 'pending')
                         ->exists();
                     
-                    $supplier = \DB::table('suppliers')->where('id', $payment->user_id)->first();
+                    $supplier = \DB::table('suppliers')->where('id', $payment->supplier_id)->first();
                     $hasUsedTrial = $supplier ? $supplier->has_used_free_trial : false;
                     $isFirstTime = !$hasPreviousSubscriptions && !$hasUsedTrial;
                     
@@ -325,7 +324,7 @@ class PaymentController extends Controller
                     
                     // Create payment transaction record
                     \DB::table('payment_transactions')->insert([
-                        'user_id' => $payment->user_id,
+                        'supplier_id' => $payment->supplier_id,
                         'subscription_plan_id' => $planId,
                         'tap_charge_id' => $payment->tap_id,
                         'type' => 'subscription',
@@ -341,7 +340,7 @@ class PaymentController extends Controller
                     
                     // Create or update user subscription
                     \DB::table('user_subscriptions')->updateOrInsert(
-                        ['user_id' => $payment->user_id],
+                        ['supplier_id' => $payment->supplier_id],
                         [
                             'subscription_plan_id' => $planId,
                             'status' => 'active',
@@ -359,7 +358,7 @@ class PaymentController extends Controller
                     
                     // Update user subscription status
                     \DB::table('suppliers')
-                        ->where('id', $payment->user_id)
+                        ->where('id', $payment->supplier_id)
                         ->update([
                             'subscription_status' => 'premium',
                             'subscription_plan_id' => $planId,
@@ -370,7 +369,7 @@ class PaymentController extends Controller
                         ]);
                     
                     Log::info('Subscription activated successfully:', [
-                        'user_id' => $payment->user_id,
+                        'supplier_id' => $payment->supplier_id,
                         'plan_id' => $planId,
                         'payment_id' => $payment->id,
                         'is_trial' => $isFirstTime,
@@ -440,15 +439,15 @@ class PaymentController extends Controller
     public function getRecentPayments(Request $request)
     {
         try {
-            $user = $request->user();
-            if (!$user) {
+            $supplier = $request->user();
+            if (!$supplier) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'User not authenticated'
+                    'message' => 'Supplier not authenticated'
                 ], 401);
             }
 
-            $payments = Payment::where('user_id', $user->id)
+            $payments = Payment::where('supplier_id', $supplier->id)
                 ->orderBy('created_at', 'desc')
                 ->limit(5)
                 ->get()
@@ -642,9 +641,14 @@ class PaymentController extends Controller
                 return;
             }
             
+            // Get supplier from metadata or find by email
+            $supplierEmail = $charge['customer']['email'] ?? null;
+            $supplier = $supplierEmail ? \App\Models\Supplier::where('email', $supplierEmail)->first() : null;
+            $supplierId = $supplier ? $supplier->id : 1;
+            
             // Create payment transaction record
             \DB::table('payment_transactions')->insert([
-                'user_id' => 1, // TODO: Get actual user ID
+                'supplier_id' => $supplierId,
                 'tap_charge_id' => $chargeId,
                 'amount' => $amount,
                 'currency' => $currency,
@@ -671,12 +675,12 @@ class PaymentController extends Controller
                     
                     // Create or update user subscription
                     \DB::table('user_subscriptions')->updateOrInsert(
-                        ['user_id' => 1], // TODO: Get actual user ID
+                        ['supplier_id' => $supplierId],
                         [
-                            'plan_id' => $planId,
+                            'subscription_plan_id' => $planId,
                             'status' => 'active',
                             'starts_at' => now(),
-                            'expires_at' => $expiresAt,
+                            'ends_at' => $expiresAt,
                             'created_at' => now(),
                             'updated_at' => now(),
                         ]
@@ -684,14 +688,14 @@ class PaymentController extends Controller
                     
                     // Update user subscription status
                     \DB::table('suppliers')
-                        ->where('id', 1) // TODO: Get actual user ID
+                        ->where('id', $supplierId)
                         ->update([
                             'subscription_status' => 'premium',
                             'subscription_plan_id' => $planId,
                             'updated_at' => now(),
                         ]);
                     
-                    Log::info('Subscription created for user 1, plan: ' . $planId);
+                    Log::info('Subscription created for supplier ' . $supplierId . ', plan: ' . $planId);
                 }
             }
             

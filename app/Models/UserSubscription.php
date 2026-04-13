@@ -10,7 +10,7 @@ class UserSubscription extends Model
     use HasFactory;
 
     protected $fillable = [
-        'user_id',
+        'supplier_id',
         'subscription_plan_id',
         'status',
         'starts_at',
@@ -35,11 +35,11 @@ class UserSubscription extends Model
     ];
 
     /**
-     * Get the user that owns the subscription
+     * Get the supplier that owns the subscription
      */
-    public function user()
+    public function supplier()
     {
-        return $this->belongsTo(User::class);
+        return $this->belongsTo(Supplier::class);
     }
 
     /**
