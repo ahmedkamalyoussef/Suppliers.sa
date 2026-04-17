@@ -251,13 +251,14 @@ class SubscriptionService
                 'trial_ends_at' => $trialDays > 0 ? $startsAt->copy()->addDays($trialDays) : null,
             ]);
             
-            // Update supplier trial status
-            if ($trialDays > 0) {
-                $supplier->update([
-                    'has_used_free_trial' => true,
-                    'trial_ends_at' => $startsAt->copy()->addDays($trialDays),
-                ]);
-            }
+            // Update supplier plan and trial status
+            $supplier->update([
+                'plan' => $plan->name,
+                'subscription_status' => 'active',
+                'subscription_plan_id' => $plan->id,
+                'has_used_free_trial' => $trialDays > 0 ? true : $supplier->has_used_free_trial,
+                'trial_ends_at' => $trialDays > 0 ? $startsAt->copy()->addDays($trialDays) : $supplier->trial_ends_at,
+            ]);
 
             // Update transaction
             $transaction->update([
