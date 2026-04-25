@@ -17,6 +17,7 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Rules\Password;
 use Laravel\Sanctum\PersonalAccessToken;
 use App\Http\Requests\Auth\UpdateSupplierPreferencesRequest;
 
@@ -46,8 +47,15 @@ class SupplierAuthController extends Controller
                 Rule::unique('admins', 'email'),
             ],
             'phone' => ['required', 'string', 'max:20'],
-            'password' => ['required', 'string', 'min:6', 'confirmed'],
-            'password_confirmation' => ['required', 'string', 'min:6'],
+            'password' => [
+                'required',
+                'string',
+                'confirmed',
+                Password::min(8)
+                    ->mixedCase()
+                    ->symbols(),
+            ],
+            'password_confirmation' => ['required', 'string', 'min:8'],
             'accept_policies' => ['required', 'boolean', 'accepted'],
         ]);
 

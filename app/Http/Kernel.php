@@ -61,5 +61,6 @@ class Kernel extends HttpKernel
         'verified' => \Illuminate\Auth\Middleware\EnsureEmailIsVerified::class,
         'check_supplier_plan_limit' => \App\Http\Middleware\CheckSupplierPlanLimit::class,
         'login.throttle' => \App\Http\Middleware\LoginThrottleMiddleware::class,
+        'session.timeout' => \App\Http\Middleware\DynamicSessionTimeout::class,
     ];
 }

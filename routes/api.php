@@ -167,7 +167,7 @@ Route::prefix('tap')->group(function () {
     Route::get('/subscription/transactions', [TapPaymentController::class, 'getUserTransactions'])->middleware('auth:sanctum:supplier');
 });
 
-Route::middleware('auth:sanctum')->group(function () {
+Route::middleware(['auth:sanctum', 'session.timeout'])->group(function () {
     // Protected supplier profile endpoint (only owner can view)
     Route::get('/suppliers/{id}', 'App\\Http\\Controllers\\Public\\SupplierProfileController@show');
     Route::post('/auth/logout', [AuthController::class, 'logout']);
