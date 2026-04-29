@@ -52,6 +52,11 @@ Route::get('/', function () {
     return response()->json(['message' => 'API is working', 'timestamp' => now()]);
 });
 
+// Test error route to verify exception handling
+Route::get('/test-error', function () {
+    throw new \Exception('Test error message for debugging');
+});
+
 // Public maintenance status (no authentication required)
 Route::get('/maintenance/status', [PublicController::class, 'getMaintenanceStatus']);
 

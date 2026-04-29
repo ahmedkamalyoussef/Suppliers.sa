@@ -28,34 +28,46 @@ class SupplierDocumentController extends Controller
 
     public function store(StoreSupplierDocumentRequest $request): JsonResponse
     {
-        $supplier = $this->resolveSupplier($request);
+        try {
+            $supplier = $this->resolveSupplier($request);
 
-        // Delete any existing documents for this supplier
-        $existingDocuments = $supplier->documents;
-        
-        // Store the new document
-        $service = new DocumentService;
-        $filePath = $service->storeDocumentFile($request->file('document'));
+            // Delete any existing documents for this supplier
+            $existingDocuments = $supplier->documents;
+            
+            // Store the new document
+            $service = new DocumentService;
+            $filePath = $service->storeDocumentFile($request->file('document'));
 
-        // Delete old documents and their files
-        foreach ($existingDocuments as $existingDoc) {
-            $this->deleteFile($existingDoc->file_path);
-            $existingDoc->delete();
+            // Delete old documents and their files
+            foreach ($existingDocuments as $existingDoc) {
+                $this->deleteFile($existingDoc->file_path);
+                $existingDoc->delete();
+            }
+
+            $document = SupplierDocument::create([
+                'supplier_id' => $supplier->id,
+                'file_path' => $filePath,
+                'document_type' => 'compliance',
+                'status' => 'pending',
+            ]);
+
+            // Update supplier status to pending when document is uploaded
+            $supplier->update(['status' => 'pending']);
+
+            return response()->json([
+                'message' => 'Document uploaded successfully and pending verification. Any existing documents were removed.',
+                'data' => (new DocumentResource($document))->toArray($request),
+            ], 201);
+        } catch (\Exception $e) {
+            \Log::error('Document upload failed: ' . $e->getMessage(), [
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+            return response()->json([
+                'message' => 'Document upload failed: ' . $e->getMessage(),
+            ], 500);
         }
-
-        $document = SupplierDocument::create([
-            'supplier_id' => $supplier->id,
-            'file_path' => $filePath,
-            'status' => 'pending',
-        ]);
-
-        // Update supplier status to pending when document is uploaded
-        $supplier->update(['status' => 'pending']);
-
-        return response()->json([
-            'message' => 'Document uploaded successfully and pending verification. Any existing documents were removed.',
-            'data' => (new DocumentResource($document))->toArray($request),
-        ], 201);
     }
 
     public function destroy(Request $request, SupplierDocument $document): JsonResponse

@@ -19,7 +19,8 @@ class DynamicSessionTimeout
      */
     public function handle(Request $request, Closure $next)
     {
-        $user = $request->user();
+        try {
+            $user = $request->user();
 
         // Check if user is a supplier - try multiple ways to be sure
         $isSupplier = false;
@@ -68,5 +69,16 @@ class DynamicSessionTimeout
         }
 
         return $next($request);
+        } catch (\Exception $e) {
+            \Log::error('DynamicSessionTimeout error: ' . $e->getMessage(), [
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+            ]);
+            return response()->json([
+                'message' => 'Middleware error: ' . $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+            ], 500);
+        }
     }
 }

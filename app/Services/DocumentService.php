@@ -10,14 +10,24 @@ class DocumentService
 {
     public function storeDocumentFile(UploadedFile $file): string
     {
-        $destDir = public_path('uploads/documents');
-        if (! File::exists($destDir)) {
-            File::makeDirectory($destDir, 0755, true);
+        try {
+            $destDir = public_path('uploads/documents');
+            \Log::info('Document upload: destination dir = ' . $destDir);
+
+            if (! File::exists($destDir)) {
+                \Log::info('Document upload: creating directory');
+                File::makeDirectory($destDir, 0755, true);
+            }
+
+            $filename = Str::uuid().'.'.$file->getClientOriginalExtension();
+            \Log::info('Document upload: moving file to ' . $destDir . '/' . $filename);
+            $file->move($destDir, $filename);
+            \Log::info('Document upload: file moved successfully');
+
+            return 'uploads/documents/'.$filename;
+        } catch (\Exception $e) {
+            \Log::error('Document upload failed in service: ' . $e->getMessage());
+            throw $e;
         }
-
-        $filename = Str::uuid().'.'.$file->getClientOriginalExtension();
-        $file->move($destDir, $filename);
-
-        return 'uploads/documents/'.$filename;
     }
 }
