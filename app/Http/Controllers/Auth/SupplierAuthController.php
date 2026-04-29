@@ -553,30 +553,95 @@ class SupplierAuthController extends Controller
             return response()->json(['message' => 'Unauthorized'], 403);
         }
 
-        // Delete profile image if exists
-        if ($supplier->profile_image) {
-            $imagePath = public_path(str_replace(url('/'), '', $supplier->profile_image));
-            if (file_exists($imagePath)) {
-                unlink($imagePath);
+        try {
+            // Start database transaction
+            \DB::beginTransaction();
+
+            // Delete profile image if exists
+            if ($supplier->profile_image) {
+                $imagePath = public_path(str_replace(url('/'), '', $supplier->profile_image));
+                if (file_exists($imagePath)) {
+                    @unlink($imagePath);
+                }
             }
+
+            // Delete product images with their files
+            foreach ($supplier->productImages()->get() as $image) {
+                $path = public_path(str_replace(url('/'), '', $image->image_url));
+                if (file_exists($path)) {
+                    @unlink($path);
+                }
+                $image->delete();
+            }
+
+            // Delete products
+            foreach ($supplier->products()->get() as $product) {
+                // Delete product images
+                foreach ($product->images()->get() as $prodImage) {
+                    $path = public_path(str_replace(url('/'), '', $prodImage->image_url));
+                    if (file_exists($path)) {
+                        @unlink($path);
+                    }
+                    $prodImage->delete();
+                }
+                $product->delete();
+            }
+
+            // Delete services
+            $supplier->services()->delete();
+
+            // Delete certifications
+            $supplier->certifications()->delete();
+
+            // Delete documents
+            foreach ($supplier->documents()->get() as $doc) {
+                if ($doc->file_path) {
+                    $path = public_path(str_replace(url('/'), '', $doc->file_path));
+                    if (file_exists($path)) {
+                        @unlink($path);
+                    }
+                }
+                $doc->delete();
+            }
+
+            // Delete profile if exists
+            if ($supplier->profile) {
+                $supplier->profile->delete();
+            }
+
+            // Delete branches
+            $supplier->branches()->delete();
+
+            // Delete inquiries
+            $supplier->inquiries()->delete();
+            $supplier->receivedSupplierInquiries()->delete();
+            $supplier->sentSupplierInquiries()->delete();
+
+            // Delete ratings
+            $supplier->ratingsGiven()->delete();
+            $supplier->ratingsReceived()->delete();
+
+            // Delete reports
+            $supplier->reportsReceived()->delete();
+            $supplier->reportsSubmitted()->delete();
+
+            // Delete all tokens (logout from all devices)
+            $supplier->tokens()->delete();
+
+            // Delete the supplier
+            $supplier->delete();
+
+            \DB::commit();
+
+            return response()->json(['message' => 'Account deleted successfully']);
+        } catch (\Exception $e) {
+            \DB::rollBack();
+            \Log::error('Delete account failed: ' . $e->getMessage());
+            return response()->json([
+                'message' => 'Failed to delete account',
+                'error' => $e->getMessage()
+            ], 500);
         }
-
-        // Delete related data (cascade delete should handle most of this)
-        $supplier->productImages()->each(function ($image) {
-            $path = public_path(str_replace(url('/'), '', $image->image_url));
-            if (file_exists($path)) {
-                unlink($path);
-            }
-            $image->delete();
-        });
-
-        // Delete all tokens (logout from all devices)
-        $supplier->tokens()->delete();
-
-        // Delete the supplier (this will cascade delete related records)
-        $supplier->delete();
-
-        return response()->json(['message' => 'Account deleted successfully']);
     }
 
     /**
