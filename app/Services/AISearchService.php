@@ -33,6 +33,20 @@ class AISearchService
                 'Printing & Publishing' => ['طباعة', 'طباعه', 'نشر', 'مطبعة', 'مطبعه', 'printing', 'publishing', 'print'],
                 'Consumer Electronics' => ['الكترونيات', 'إلكترونيات', 'اجهزة', 'أجهزة', 'تلفزيون', 'موبايل', 'electronics', 'devices', 'gadgets'],
                 'Hospital & Medical Supplies' => ['مستشفى', 'مستشفي', 'طبي', 'صحي', 'hospital', 'medical', 'clinic'],
+                'Construction Services and Consultation' => ['بناء', 'استشارات', 'مقاولات', 'تشييد', 'إنشاءات', 'construction', 'consultation', 'contracting'],
+                'IT & Cybersecurity' => ['سيبراني', 'أمن سيبراني', 'تقنية معلومات', 'أمن معلومات', 'cybersecurity', 'it services', 'infosec'],
+                'Logistics & Supply Chain' => ['لوجستيات', 'سلسلة إمداد', 'سلسلة توريد', 'لوجستية', 'logistics', 'supply chain'],
+                'Freight & Shipping' => ['شحن', 'نقل بضائع', 'شحن بحري', 'شحن جوي', 'freight', 'shipping', 'cargo'],
+                'Maintenance & Repair Services' => ['صيانة', 'إصلاح', 'تصليح', 'maintenance', 'repair'],
+                'Cleaning Services' => ['تنظيف', 'نظافة', 'غسيل', 'تعقيم', 'cleaning', 'janitorial'],
+                'Waste Management' => ['نفايات', 'إعادة تدوير', 'مخلفات', 'waste', 'recycling', 'disposal'],
+                'Financial Services' => ['مالية', 'محاسبة', 'تمويل', 'ضرائب', 'financial', 'accounting', 'finance'],
+                'Legal Services' => ['قانون', 'محاماة', 'قانوني', 'عقود', 'legal', 'law', 'lawyer', 'attorney'],
+                'Human Resources Services' => ['موارد بشرية', 'توظيف', 'رواتب', 'تعيين', 'hr', 'human resources', 'recruitment'],
+                'Fire Safety & Systems' => ['حريق', 'إطفاء', 'سلامة', 'مكافحة حريق', 'fire safety', 'fire protection', 'firefighting'],
+                'Facility Maintenance' => ['مرافق', 'صيانة مباني', 'إدارة مرافق', 'facility', 'building maintenance'],
+                'Industrial Maintenance' => ['صيانة صناعية', 'صيانة آلات', 'معدات ثقيلة', 'industrial maintenance', 'machine maintenance'],
+                'Retail & Trading' => ['تجزئة', 'تجارة', 'بيع', 'استيراد', 'تصدير', 'retail', 'trading', 'wholesale'],
             ],
             
             'rating_patterns' => [
@@ -311,6 +325,62 @@ class AISearchService
             'Telecommunications' => [
                 'اتصالات', 'هواتف', 'إنترنت', 'شبكات', 'ألياف بصرية', 'خدمات اتصالات', 'هاتف أرضي', 'هاتف محمول', 'スマホ', 'جهاز لوحي', 'تابلت', 'آيفون', 'سامسونج', 'هواوي', 'شاومي', 'أوبو', 'فيفو', 'نوكيا', 'سوني', 'إل جي', 'موتورولا', ' HTC', 'بلاك بيري', 'جوجل بكسل', 'هواوي P', 'سامسونج جالاكسي', 'آيفون برو', 'آيفون ماكس', 'آيباد', 'آيباد برو', 'آيباد ميني', 'آيباد إير', 'سامسونج تاب', 'هواوي ميد باد', 'شاومي باد', 'سوني إكسبريا تاب', 'لينوفو تاب', 'أيسر تاب', 'توشيبا تاب', 'فوجيتسو تاب', 'باناسونيك تاب', 'إل جي تاب', 'سيم كارت', 'شريحة اتصال', 'شريحة إنترنت', 'رصيد', 'باقات', 'دقائق', 'رسائل', 'إنترنت 4G', 'إنترنت 5G', 'واي فاي', 'بلوتوث', 'NFC', 'GPS', 'GLONASS', 'غاليليو', 'بيدو', 'ساتناڤ', 'خرائط', 'ملاحة', 'تطبيق خرائط', 'جوجل مابس', 'خرائط جوجل', 'ويزي', 'سيرجا', 'نافيتيل', 'توم توم', 'جارمين', 'هنا',
                 'telecommunications', 'internet', 'networks', 'fiber optics', 'communication services', 'landline', 'mobile phone', 'smartphone', 'tablet', 'iphone', 'samsung', 'huawei', 'xiaomi', 'oppo', 'vivo', 'nokia', 'sony', 'lg', 'motorola', 'htc', 'blackberry', 'google pixel', 'huawei p', 'samsung galaxy', 'iphone pro', 'iphone max', 'ipad', 'ipad pro', 'ipad mini', 'ipad air', 'samsung tab', 'huawei medipad', 'xiaomi pad', 'sony xperia tab', 'lenovo tab', 'acer tab', 'toshiba tab', 'fujitsu tab', 'panasonic tab', 'lg tab', 'sim card', 'internet chip', 'balance', 'packages', 'minutes', 'messages', '4G internet', '5G internet', 'wifi', 'bluetooth', 'NFC', 'GPS', 'GLONASS', 'Galileo', 'Beidou', 'satnav', 'maps', 'navigation', 'map app', 'google maps', 'waze', 'sygic', 'navitel', 'tomtom', 'garmin', 'here'
+            ],
+            'Construction Services and Consultation' => [
+                'خدمات بناء', 'استشارات بناء', 'استشارات هندسية', 'مقاولات عامة', 'تشييد مباني', 'إنشاءات', 'مقاول', 'ترميم', 'تجديد', 'تصميم معماري', 'إدارة مشاريع بناء', 'أساسات', 'خرسانة', 'إسمنت', 'طوب', 'حديد تسليح', 'تشطيبات', 'ديكور داخلي', 'عزل', 'مواد بناء', 'تصميم إنشائي', 'استشاري هندسي', 'مكتب هندسي',
+                'construction services', 'construction consulting', 'engineering consultation', 'general contracting', 'building construction', 'renovation', 'remodeling', 'architectural design', 'project management', 'foundation', 'concrete', 'cement', 'structural design', 'civil engineering', 'building materials', 'finishing works'
+            ],
+            'IT & Cybersecurity' => [
+                'تقنية معلومات', 'أمن سيبراني', 'أمن معلومات', 'حماية بيانات', 'شبكات', 'خوادم', 'سيرفرات', 'حوسبة سحابية', 'تطوير برمجيات', 'اختبار اختراق', 'جدار حماية', 'فايروال', 'تشفير', 'استشارات تقنية', 'أنظمة معلومات', 'دعم فني', 'بنية تحتية تقنية',
+                'information technology', 'cybersecurity', 'information security', 'data protection', 'network security', 'server management', 'cloud computing', 'software development', 'penetration testing', 'firewall', 'encryption', 'it consulting', 'it infrastructure', 'tech support', 'managed it services', 'SOC', 'SIEM'
+            ],
+            'Logistics & Supply Chain' => [
+                'خدمات لوجستية', 'سلسلة إمداد', 'سلسلة توريد', 'إدارة مخزون', 'تخزين', 'توزيع', 'مستودعات', 'لوجستيات', 'تخليص جمركي', 'نقل بضائع', 'شحن', 'إدارة لوجستية',
+                'logistics services', 'supply chain', 'supply chain management', 'inventory management', 'warehousing', 'distribution', 'fulfillment', 'customs clearance', '3PL', 'third party logistics', 'last mile delivery'
+            ],
+            'Freight & Shipping' => [
+                'شحن دولي', 'شحن بحري', 'شحن جوي', 'شحن بري', 'نقل بضائع', 'حاويات', 'كونتينر', 'وكالة شحن', 'شحن سريع', 'شحن بضائع خطرة', 'ميناء', 'تفريغ', 'تحميل',
+                'freight', 'shipping', 'sea freight', 'air freight', 'land freight', 'cargo', 'container', 'freight forwarding', 'express shipping', 'hazmat shipping', 'port', 'FCL', 'LCL'
+            ],
+            'Maintenance & Repair Services' => [
+                'صيانة', 'إصلاح', 'تصليح', 'صيانة عامة', 'صيانة منزلية', 'صيانة مكيفات', 'صيانة كهربائية', 'سباكة', 'صيانة أجهزة', 'صيانة دورية', 'صيانة وقائية', 'صيانة طوارئ', 'إصلاح معدات',
+                'maintenance', 'repair', 'general maintenance', 'home repair', 'ac maintenance', 'electrical repair', 'plumbing', 'appliance repair', 'preventive maintenance', 'emergency repair', 'equipment maintenance'
+            ],
+            'Cleaning Services' => [
+                'تنظيف', 'نظافة', 'خدمات تنظيف', 'تنظيف منازل', 'تنظيف مكاتب', 'غسيل سجاد', 'تعقيم', 'تطهير', 'مكافحة حشرات', 'تنظيف صناعي', 'نظافة عميقة', 'تنظيف واجهات', 'تنظيف بعد البناء',
+                'cleaning', 'cleaning services', 'house cleaning', 'office cleaning', 'carpet cleaning', 'sanitization', 'disinfection', 'pest control', 'industrial cleaning', 'deep cleaning', 'facade cleaning', 'janitorial'
+            ],
+            'Waste Management' => [
+                'نفايات', 'إدارة نفايات', 'إعادة تدوير', 'مخلفات', 'تخلص نفايات', 'نفايات صلبة', 'نفايات طبية', 'نفايات صناعية', 'معالجة نفايات', 'حاويات نفايات', 'نقل نفايات',
+                'waste management', 'recycling', 'waste disposal', 'solid waste', 'medical waste', 'industrial waste', 'waste treatment', 'waste collection', 'waste transport', 'environmental services'
+            ],
+            'Financial Services' => [
+                'خدمات مالية', 'محاسبة', 'تدقيق', 'استشارات مالية', 'ضرائب', 'تمويل', 'إدارة أصول', 'تخطيط مالي', 'تأمين', 'خدمات مصرفية', 'زكاة', 'ضريبة قيمة مضافة',
+                'financial services', 'accounting', 'auditing', 'financial consulting', 'tax', 'financing', 'asset management', 'financial planning', 'insurance', 'banking', 'VAT', 'bookkeeping'
+            ],
+            'Legal Services' => [
+                'خدمات قانونية', 'محاماة', 'استشارات قانونية', 'عقود', 'قضايا', 'توثيق', 'محامي', 'مكتب محاماة', 'تحكيم', 'ملكية فكرية', 'قانون تجاري', 'قانون عمل', 'تسجيل شركات',
+                'legal services', 'law', 'lawyer', 'attorney', 'legal consulting', 'contracts', 'litigation', 'notarization', 'arbitration', 'intellectual property', 'commercial law', 'labor law', 'company registration'
+            ],
+            'Human Resources Services' => [
+                'موارد بشرية', 'توظيف', 'استقطاب', 'رواتب', 'تدريب موظفين', 'تعهيد', 'إدارة أداء', 'شؤون موظفين', 'تعيين', 'رأس مال بشري',
+                'human resources', 'hr', 'recruitment', 'staffing', 'payroll', 'employee training', 'outsourcing', 'performance management', 'talent acquisition', 'headhunting'
+            ],
+            'Fire Safety & Systems' => [
+                'سلامة حريق', 'مكافحة حريق', 'إطفاء', 'أنظمة إنذار حريق', 'طفايات حريق', 'رشاشات حريق', 'سلامة مهنية', 'معدات وقاية', 'فحص سلامة', 'أنظمة إطفاء',
+                'fire safety', 'fire protection', 'firefighting', 'fire alarm systems', 'fire extinguishers', 'sprinkler systems', 'occupational safety', 'PPE', 'safety inspection', 'fire suppression'
+            ],
+            'Facility Maintenance' => [
+                'صيانة مرافق', 'إدارة مرافق', 'صيانة مباني', 'صيانة تكييف', 'صيانة مصاعد', 'صيانة كهربائية مباني', 'نظافة مرافق', 'صيانة حدائق', 'إدارة عقارات',
+                'facility maintenance', 'facility management', 'building maintenance', 'HVAC maintenance', 'elevator maintenance', 'building electrical', 'landscaping', 'property management', 'janitorial services'
+            ],
+            'Industrial Maintenance' => [
+                'صيانة صناعية', 'صيانة آلات', 'صيانة خطوط إنتاج', 'إصلاح معدات ثقيلة', 'صيانة هيدروليك', 'صيانة أنظمة تبريد صناعية', 'قطع غيار صناعية', 'صيانة وقائية صناعية',
+                'industrial maintenance', 'machine maintenance', 'production line maintenance', 'heavy equipment repair', 'hydraulic maintenance', 'industrial cooling', 'industrial spare parts', 'industrial preventive maintenance'
+            ],
+            'Retail & Trading' => [
+                'تجزئة', 'تجارة', 'بيع بالجملة', 'بيع بالتجزئة', 'توزيع', 'استيراد', 'تصدير', 'وكالات تجارية', 'تجارة إلكترونية', 'توريد عام', 'منتجات استهلاكية',
+                'retail', 'trading', 'wholesale', 'retail trading', 'distribution', 'import', 'export', 'commercial agencies', 'e-commerce', 'general supply', 'consumer products'
             ]
         ];
         

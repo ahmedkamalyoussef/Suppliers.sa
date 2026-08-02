@@ -28,6 +28,20 @@ class UpdateSupplierProfileRequest extends FormRequest
                 }
             }
         }
+
+        if ($this->has('additionalPhones')) {
+            $phones = $this->input('additionalPhones');
+            if (is_string($phones)) {
+                $decoded = json_decode($phones, true);
+                $phones = (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) ? $decoded : [];
+            }
+            if (is_array($phones)) {
+                $filtered = array_values(array_filter($phones, function ($item) {
+                    return is_array($item) && ! empty(trim((string) ($item['number'] ?? '')));
+                }));
+                $this->merge(['additionalPhones' => $filtered]);
+            }
+        }
     }
 
     public function rules(): array
@@ -75,10 +89,10 @@ class UpdateSupplierProfileRequest extends FormRequest
             'hasBranches' => ['sometimes', 'boolean'],
             'branches' => ['sometimes', 'array'],
             'branches.*.name' => ['required_with:branches', 'string', 'max:255'],
-            'branches.*.phone' => ['required_with:branches', 'string', 'max:20'],
+            'branches.*.phone' => ['nullable', 'string', 'max:20'],
             'branches.*.email' => ['nullable', 'email', 'max:255'],
             'branches.*.address' => ['required_with:branches', 'string', 'max:500'],
-            'branches.*.manager' => ['required_with:branches', 'string', 'max:255'],
+            'branches.*.manager' => ['nullable', 'string', 'max:255'],
             'branches.*.location.lat' => ['sometimes', 'numeric'],
             'branches.*.location.lng' => ['sometimes', 'numeric'],
             'branches.*.workingHours' => ['sometimes', 'array'],

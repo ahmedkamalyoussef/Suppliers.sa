@@ -42,6 +42,10 @@ class SupplierSummaryResource extends JsonResource
             'longitude' => $profile?->longitude,
             'mainPhone' => $profile?->main_phone,
             'contactEmail' => $profile?->contact_email,
+            'hasBranches' => (bool) ($profile?->has_branches || ($supplier->relationLoaded('branches') && $supplier->branches->isNotEmpty())),
+            'branches' => $supplier->relationLoaded('branches') && $supplier->branches
+                ? $supplier->branches->map(fn ($branch) => (new \App\Http\Resources\Public\BranchResource($branch))->toArray($request))->values()->all()
+                : [],
             'services' => $this->formatServices($profile?->services_offered),
             'targetMarket' => $this->formatTargetMarket($profile?->target_market),
             'preferences' => [

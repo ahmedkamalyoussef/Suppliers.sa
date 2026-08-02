@@ -29,10 +29,10 @@ class BranchController extends Controller
 
         $validated = $request->validate([
             'name' => 'required|string|max:255',
-            'phone' => 'required|string|max:20',
+            'phone' => 'nullable|string|max:20',
             'email' => 'nullable|email|max:255',
             'address' => 'nullable|string|max:500',
-            'manager_name' => 'required|string|max:255',
+            'manager_name' => 'nullable|string|max:255',
             'latitude' => 'nullable|numeric',
             'longitude' => 'nullable|numeric',
             'working_hours' => 'nullable|array',
@@ -196,6 +196,13 @@ class BranchController extends Controller
 
         if (! $request->has('status') && $request->isMethod('post')) {
             $request->merge(['status' => 'active']);
+        }
+
+        // Convert empty strings to null for optional fields
+        foreach (['phone', 'email', 'manager_name'] as $field) {
+            if ($request->input($field) === '') {
+                $request->merge([$field => null]);
+            }
         }
     }
 

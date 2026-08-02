@@ -109,22 +109,28 @@ class SupplierProfileService
         }
 
         $branches = $request->input('branches', []);
+
+        // Clear previous inline branches if branches array is provided
+        $supplier->branches()->delete();
+
         foreach ($branches as $b) {
             $payload = [
                 'name' => $b['name'] ?? null,
                 'phone' => $b['phone'] ?? null,
                 'email' => $b['email'] ?? null,
                 'address' => $b['address'] ?? null,
-                'manager_name' => $b['manager'] ?? null,
-                'latitude' => data_get($b, 'location.lat'),
-                'longitude' => data_get($b, 'location.lng'),
-                'working_hours' => $b['workingHours'] ?? $this->defaultBranchHours(),
-                'special_services' => $b['specialServices'] ?? [],
-                'is_main_branch' => (bool) ($b['isMainBranch'] ?? false),
-                'status' => 'active',
+                'manager_name' => $b['manager'] ?? $b['manager_name'] ?? null,
+                'latitude' => data_get($b, 'location.lat') ?? $b['latitude'] ?? null,
+                'longitude' => data_get($b, 'location.lng') ?? $b['longitude'] ?? null,
+                'working_hours' => $b['workingHours'] ?? $b['working_hours'] ?? $this->defaultBranchHours(),
+                'special_services' => $b['specialServices'] ?? $b['special_services'] ?? [],
+                'is_main_branch' => (bool) ($b['isMainBranch'] ?? $b['is_main_branch'] ?? false),
+                'status' => $b['status'] ?? 'active',
             ];
 
-            $supplier->branches()->create($payload);
+            if (! empty($payload['name']) && ! empty($payload['address'])) {
+                $supplier->branches()->create($payload);
+            }
         }
     }
 

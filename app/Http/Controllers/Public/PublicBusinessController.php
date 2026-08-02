@@ -131,7 +131,7 @@ private function isOpenNow($hours, string $day, string $now)
         $perPage = max(1, min($perPage, 50));
 
         $suppliers = Supplier::query()
-            ->with(['profile'])
+            ->with(['profile', 'branches'])
             ->withAvg('approvedRatings as rating_average', 'score')
             ->withCount('approvedRatings as rating_count');
 
@@ -270,7 +270,7 @@ private function isOpenNow($hours, string $day, string $now)
         $perPage = max(1, min($perPage, 50));
 
         $suppliers = Supplier::query()
-            ->with(['profile'])
+            ->with(['profile', 'branches'])
             ->withAvg('approvedRatings as rating_average', 'score')
             ->withCount('approvedRatings as rating_count');
 

@@ -400,7 +400,6 @@ class PaymentController extends Controller
                 ->get()
                 ->map(function ($plan) {
                     $features = json_decode($plan->features, true) ?? [];
-                    $features = is_array($features) && isset($features['en']) ? $features['en'] : $features;
                     
                     return [
                         'id' => $plan->id,

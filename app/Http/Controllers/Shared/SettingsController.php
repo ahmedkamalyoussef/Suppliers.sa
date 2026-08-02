@@ -359,7 +359,7 @@ class SettingsController extends Controller
             'site_name' => Cache::get('settings.general.site_name', 'Suppliers.sa'),
             'site_description' => Cache::get('settings.general.site_description', 'Find the best suppliers in Saudi Arabia'),
             'contact_email' => Cache::get('settings.general.contact_email', 'info@suppliers.sa'),
-            'contact_phone' => Cache::get('settings.general.contact_phone', '+966 50 123 4567'),
+            'contact_phone' => Cache::get('settings.general.contact_phone', '50 123 4567'),
             'contact_address' => Cache::get('settings.general.contact_address', 'Riyadh, Saudi Arabia'),
             'default_language' => Cache::get('settings.general.default_language', 'en'),
             'default_currency' => Cache::get('settings.general.default_currency', 'SAR'),
