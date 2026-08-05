@@ -148,21 +148,66 @@ class AdminDocumentController extends Controller
             'notes' => ['nullable', 'string'],
         ]);
 
-        $document->forceFill([
-            'status' => 'verified',
-            'notes' => $validated['notes'] ?? $document->notes,
-            'reviewed_by_admin_id' => $admin->id,
-            'reviewed_at' => now(),
-        ])->save();
+        // Step 1: Log Admin Clicked Approve
+        \Illuminate\Support\Facades\Log::info("[Verification Approval] Admin ID {$admin->id} clicked Approve for Document ID {$document->id}.");
 
-        // Update supplier status to active when document is approved
-        $supplier = $document->supplier;
-        if ($supplier->status !== 'active') {
-            $supplier->forceFill(['status' => 'active'])->save();
+        $wasAlreadyVerified = $document->status === 'verified';
+        $emailSent = false;
+        $supplier = null;
+
+        // Step 2: Execute Database transaction for status update
+        \Illuminate\Support\Facades\DB::transaction(function () use ($document, $validated, $admin, &$supplier) {
+            $document->forceFill([
+                'status' => 'verified',
+                'notes' => $validated['notes'] ?? $document->notes,
+                'reviewed_by_admin_id' => $admin->id,
+                'reviewed_at' => now(),
+            ])->save();
+
+            $supplier = $document->supplier;
+            if ($supplier && $supplier->status !== 'active') {
+                $supplier->forceFill(['status' => 'active'])->save();
+            }
+        });
+
+        // Step 3: Log DB transaction succeeded & committed
+        \Illuminate\Support\Facades\Log::info("[Verification Approval] DB transaction committed for Document ID {$document->id}. Supplier ID: " . ($supplier ? $supplier->id : 'N/A') . ", Document Status: verified.");
+
+        // Step 4: Execute email dispatch after DB transaction commits
+        if ($supplier && !empty($supplier->email)) {
+            if ($wasAlreadyVerified) {
+                \Illuminate\Support\Facades\Log::info("[Verification Approval] Document ID {$document->id} was already verified. Skipping duplicate approval email to {$supplier->email}.");
+            } else {
+                \Illuminate\Support\Facades\Log::info("[Verification Approval] Calling email service for recipient {$supplier->email}...");
+                try {
+                    \Illuminate\Support\Facades\Log::info("[Verification Approval] Sending SMTP email request to {$supplier->email}...");
+
+                    \Illuminate\Support\Facades\Mail::to($supplier->email)->send(new \App\Mail\BusinessVerificationApprovedMail($supplier));
+
+                    $emailSent = true;
+                    \Illuminate\Support\Facades\Log::info("[Verification Approval] SMTP provider response received successfully. Verification approval email delivered to {$supplier->email}.");
+                } catch (\Throwable $e) {
+                    \Illuminate\Support\Facades\Log::error("[Verification Approval] Exception caught while sending verification email to {$supplier->email}: " . $e->getMessage(), [
+                        'exception' => $e->getTraceAsString(),
+                    ]);
+                }
+            }
+        } else {
+            \Illuminate\Support\Facades\Log::warning("[Verification Approval] No email address found for Supplier ID " . ($supplier ? $supplier->id : 'N/A') . ". Email not sent.");
         }
 
+        // Step 5: Return success response after email step completes
         return response()->json([
-            'message' => 'Document approved and supplier status updated to active.',
+            'message' => $emailSent
+                ? 'Document approved, business verified, and approval email sent successfully.'
+                : 'Document approved and business verified.',
+            'data' => [
+                'id' => $document->id,
+                'status' => $document->status,
+                'supplier_status' => $supplier ? $supplier->status : null,
+                'verified' => true,
+                'email_sent' => $emailSent,
+            ],
         ]);
     }
 
